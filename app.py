@@ -74,8 +74,8 @@ COL_OWNER               = "Owner"
 COL_GROUP_PROBLEM       = "Group problem"
 COL_SUB_PROBLEM         = "Sub Problem"
 COL_ACCIDENT            = "Accident"
-COL_OVERDUE_DETAIL      = "Overdue Detail"
-COL_LINK_PHOTO          = "แนบLINK รูป"
+COL_OVERDUE_DETAIL      = "Overdue Detail แนบLINK รูป"   # Column AG — combined field
+COL_LINK_PHOTO          = "Overdue Detail แนบLINK รูป"   # same column, kept for compat
 COL_LINK_EVIDENCE       = "แนบ LINK ชี้แจง"
 
 # Step 2 — FSO fills
@@ -365,13 +365,19 @@ def submit_step1(ticketid):
         if current_step not in ("", "0", "1"):
             return jsonify({"error": f"Ticket อยู่ที่ Step {current_step} แล้ว ไม่สามารถแก้ไข Step 1"}), 403
 
+        # AG column = "Overdue Detail แนบLINK รูป" — combine overdue text + photo link
+        overdue_text = data.get("overdue_detail", "")
+        link_photo   = data.get("link_photo", "")
+        overdue_combined = overdue_text
+        if link_photo:
+            overdue_combined = f"{overdue_text} / {link_photo}" if overdue_text else link_photo
+
         fields = {
             COL_OWNER:          session.get("name"),
             COL_GROUP_PROBLEM:  data.get("group_problem", ""),
             COL_SUB_PROBLEM:    data.get("sub_problem", ""),
             COL_ACCIDENT:       data.get("accident", ""),
-            COL_OVERDUE_DETAIL: data.get("overdue_detail", ""),
-            COL_LINK_PHOTO:     data.get("link_photo", ""),
+            COL_OVERDUE_DETAIL: overdue_combined,
             COL_LINK_EVIDENCE:  data.get("link_evidence", ""),
             COL_STEP:           "1",
             COL_LAST_UPDATED:   now_str(),
