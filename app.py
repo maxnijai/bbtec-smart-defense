@@ -109,10 +109,23 @@ ROLE_FSO_MGR    = "FSO Manager"
 ROLE_REGIONAL   = "Regional"
 ROLE_MANAGER    = "Manager"
 
-STEP1_ROLES = [ROLE_ENGINEER, ROLE_SITE_SUP]
-STEP2_ROLES = [ROLE_FSO, ROLE_FSO_MGR]
-STEP5_ROLES = [ROLE_MANAGER]
-VIEW_ONLY_ROLES = [ROLE_REGIONAL]
+# Accept all variants used in USER_ACCOUNT sheet
+STEP1_ROLES = [ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "engineer", "site_sup", "Engineer Zone"]
+STEP2_ROLES = [ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "fso", "FSO Manager Zone"]
+STEP5_ROLES = [ROLE_MANAGER, "MANAGER", "Manager NOR1", "Manager NOR2", "BBTEC Manager"]
+VIEW_ONLY_ROLES = [ROLE_REGIONAL, "REGIONAL", "Regional"]
+
+def is_step1_role(role):
+    r = str(role).strip().upper()
+    return r in [x.upper() for x in STEP1_ROLES]
+
+def is_step2_role(role):
+    r = str(role).strip().upper()
+    return r in [x.upper() for x in STEP2_ROLES]
+
+def is_step5_role(role):
+    r = str(role).strip().upper()
+    return r in [x.upper() for x in STEP5_ROLES]
 
 # ─────────────────────────────────────────────
 # Helpers
@@ -169,14 +182,32 @@ def get_col_index(headers, col_name):
     return None
 
 def ensure_new_columns(sheet):
-    """Add system columns if they don't exist yet."""
+    """Add system columns if they don't exist yet.
+    Uses batch update to avoid exceeding grid limits."""
     headers = sheet.row_values(1)
-    for col_name in NEW_COLUMNS:
-        if col_name not in headers:
-            next_col = len(headers) + 1
-            sheet.update_cell(1, next_col, col_name)
-            headers.append(col_name)
-    return sheet.row_values(1)
+    missing = [c for c in NEW_COLUMNS if c not in headers]
+    if not missing:
+        return headers
+
+    # How many columns does the sheet currently have?
+    # gspread sheet.col_count gives the actual grid width
+    try:
+        current_cols = sheet.col_count
+    except Exception:
+        current_cols = len(headers)
+
+    needed = len(headers) + len(missing)
+    if needed > current_cols:
+        # Resize the sheet to fit — adds blank columns
+        sheet.resize(cols=needed)
+
+    # Now write the missing headers
+    for col_name in missing:
+        next_col = len(headers) + 1
+        sheet.update_cell(1, next_col, col_name)
+        headers.append(col_name)
+
+    return headers
 
 def update_ticket_fields(sheet, headers, row_idx, fields: dict):
     """Update specific fields for a ticket row."""
@@ -200,8 +231,10 @@ def require_role(*roles):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            if session.get("role") not in roles:
-                return jsonify({"error": "Forbidden: insufficient role"}), 403
+            user_role = str(session.get("role","")).strip().upper()
+            allowed = [str(r).strip().upper() for r in roles]
+            if user_role not in allowed:
+                return jsonify({"error": f"Forbidden: role '{session.get('role')}' not in {roles}"}), 403
             return f(*args, **kwargs)
         return decorated
     return decorator
@@ -311,7 +344,7 @@ def get_ticket(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/step1", methods=["POST"])
 @login_required
-@require_role(ROLE_ENGINEER, ROLE_SITE_SUP)
+@require_role(ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "Engineer Zone")
 def submit_step1(ticketid):
     data = request.json or {}
     try:
@@ -354,7 +387,7 @@ def submit_step1(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/step2", methods=["POST"])
 @login_required
-@require_role(ROLE_FSO, ROLE_FSO_MGR)
+@require_role(ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "FSO Manager Zone")
 def submit_step2(ticketid):
     data = request.json or {}
     decision = data.get("fso_decision", "").strip()  # "ปรับ" or "ไม่ปรับ"
@@ -403,7 +436,7 @@ def submit_step2(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/defend/request", methods=["POST"])
 @login_required
-@require_role(ROLE_ENGINEER, ROLE_SITE_SUP)
+@require_role(ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "Engineer Zone")
 def request_defend(ticketid):
     data = request.json or {}
     defend_reason = data.get("defend_reason", "").strip()
@@ -456,7 +489,7 @@ def request_defend(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/defend/review", methods=["POST"])
 @login_required
-@require_role(ROLE_FSO, ROLE_FSO_MGR)
+@require_role(ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "FSO Manager Zone")
 def review_defend(ticketid):
     data = request.json or {}
     decision = data.get("decision", "").strip()  # "ปรับ" or "ไม่ปรับ"
@@ -516,7 +549,7 @@ def review_defend(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/approve", methods=["POST"])
 @login_required
-@require_role(ROLE_MANAGER)
+@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "Manager NOR1", "Manager NOR2")
 def manager_approve(ticketid):
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
