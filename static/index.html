@@ -835,12 +835,14 @@ function openTicket(ticket){
         </div>
         <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident</div>
           <input class="form-input" id="f-accident" placeholder="Accident (ถ้ามี)" value="${ticket.Accident||''}"/></div>
-        <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Overdue Detail</div>
-          <textarea class="form-textarea" id="f-overdue">${ticket['Overdue Detail']||''}</textarea></div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
+          <textarea class="form-textarea" id="f-overdue">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
+        </div>
         <div class="form-row" style="margin-bottom:10px">
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK รูป</div>
-            <input class="form-input" id="f-photo" placeholder="https://..." value="${ticket['แนบLINK รูป']||''}"/></div>
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK ชี้แจง</div>
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK รูป (ใส่ใน AG ต่อท้าย)</div>
+            <input class="form-input" id="f-photo" placeholder="https://photos.app.goo.gl/..." value=""/></div>
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
             <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||''}"/></div>
         </div>
         <div class="modal-actions">
@@ -856,8 +858,11 @@ function openTicket(ticket){
       <div class="form-section">
         <div class="form-section-title">STEP 2 — FSO พิจารณา</div>
         <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
-          Group Problem: <b style="color:var(--text)">${ticket['Group problem']||'—'}</b> | 
-          Overdue: <b style="color:var(--text)">${ticket['Overdue Detail']||'—'}</b>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><span style="color:var(--muted)">Group: </span><b style="color:var(--text)">${ticket['Group problem']||'—'} ${ticket['Sub Problem']?'/ '+ticket['Sub Problem']:''}</b></div>
+            <div><span style="color:var(--muted)">Accident: </span><b style="color:var(--text)">${ticket.Accident||'—'}</b></div>
+          </div>
+          <div style="margin-top:6px"><span style="color:var(--muted)">Overdue Detail + Link รูป (AG): </span><span style="color:var(--text)">${ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—'}</span></div>
         </div>
         <div class="decision-row">
           <button class="dec-btn" id="dec-penalty" onclick="selectDecision('ปรับ')">🔴 ปรับ</button>
