@@ -673,7 +673,11 @@ async function loadTickets(){
   try {
     const res = await fetch(`${API}/api/tickets`,{credentials:'include'});
     const data = await res.json();
-    allTickets = data.tickets || [];
+    allTickets = (data.tickets || []).sort((a,b)=>{
+      const av = parseFloat(String(a.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+      const bv = parseFloat(String(b.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+      return bv - av;
+    });
     $('tickets-loading').style.display='none';
     $('ticket-table').style.display='table';
     renderTicketTable(allTickets);
@@ -730,7 +734,7 @@ function renderMyTickets(){
   let filtered = [];
   let title = 'Ticket ที่รอดำเนินการ';
 
-  if(['Engineer','Site Sup'].includes(role)){
+  if(isEngineerRole(role)){
     filtered = allTickets.filter(t => !t.STEP || t.STEP==='1' || t.STEP==='3');
     title = 'Ticket รอ Engineer / ขอ Defend';
   } else if(['FSO','FSO Manager'].includes(role)){
@@ -783,6 +787,20 @@ function renderCharts(){
   });
 }
 
+// ── Role helpers (case-insensitive, matches ENGINEER_ZONE etc) ──
+function isEngineerRole(role){
+  const r = (role||'').toUpperCase();
+  return ['ENGINEER','SITE SUP','ENGINEER_ZONE','ENGINEER ZONE'].includes(r);
+}
+function isFSORole(role){
+  const r = (role||'').toUpperCase();
+  return ['FSO','FSO MANAGER','FSO_ZONE','FSO ZONE','FSO MANAGER ZONE'].includes(r);
+}
+function isManagerRole(role){
+  const r = (role||'').toUpperCase();
+  return ['MANAGER','BBTEC MANAGER','MANAGER NOR1','MANAGER NOR2'].includes(r);
+}
+
 // ── Modal ──
 function openTicket(ticket){
   const role = currentUser?.role || '';
@@ -805,7 +823,7 @@ function openTicket(ticket){
   let formHTML = '';
 
   // Step 1 form (Engineer)
-  if(['Engineer','Site Sup'].includes(role) && !locked && (step===''||step==='0'||step==='1')){
+  if(isEngineerRole(role) && !locked && (step===''||step==='0'||step==='1')){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 1 — Engineer กรอกข้อมูล</div>
@@ -833,7 +851,7 @@ function openTicket(ticket){
   }
 
   // Step 2 form (FSO)
-  else if(['FSO','FSO Manager'].includes(role) && !locked && step==='1'){
+  else if(isFSORole(role) && !locked && step==='1'){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 2 — FSO พิจารณา</div>
@@ -856,7 +874,7 @@ function openTicket(ticket){
   }
 
   // Step 3 Defend request (Engineer)
-  else if(['Engineer','Site Sup'].includes(role) && !locked && step==='2' && fsoDecision==='ปรับ' && defendCount<2){
+  else if(isEngineerRole(role) && !locked && (step==='2'||step==='3') && fsoDecision==='ปรับ' && defendCount<2){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 3 — ขอ Defend</div>
@@ -877,7 +895,7 @@ function openTicket(ticket){
   }
 
   // Step 3 Defend review (FSO)
-  else if(['FSO','FSO Manager'].includes(role) && !locked && step==='3'){
+  else if(isFSORole(role) && !locked && step==='3'){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 3 — FSO พิจารณา Defend ครั้งที่ ${defendCount}</div>
@@ -899,7 +917,7 @@ function openTicket(ticket){
   }
 
   // Step 5 Manager Approve
-  else if(role==='Manager' && !locked && step==='4'){
+  else if(isManagerRole(role) && !locked && step==='4'){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 5 — Manager Approve</div>
@@ -924,11 +942,17 @@ function openTicket(ticket){
   $('modal-body').innerHTML = `
     <div class="step-progress">${spHTML}</div>
     <div class="detail-grid">
-      <div class="detail-item"><div class="detail-label">Subject</div><div class="detail-val">${ticket.SUBJECT||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">TICKET ID</div><div class="detail-val" style="font-family:var(--mono);color:var(--accent2)">${ticket.TICKETID||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">EXTERNALSYSTEM_TICKETID</div><div class="detail-val" style="font-family:var(--mono)">${ticket.EXTERNALSYSTEM_TICKETID||'—'}</div></div>
+      <div class="detail-item" style="grid-column:span 2"><div class="detail-label">Subject</div><div class="detail-val">${ticket.SUBJECT||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">Province / Region</div><div class="detail-val">${ticket.TrackB_Region||'—'}</div></div>
-      <div class="detail-item"><div class="detail-label">ค่าปรับ (บาท)</div><div class="detail-val" style="color:var(--red)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div></div>
-      <div class="detail-item"><div class="detail-label">PENALTY_FLAG</div><div class="detail-val">${ticket.PENALTY_FLAG||'—'}</div></div>
-      <div class="detail-item"><div class="detail-label">Group Problem</div><div class="detail-val">${ticket['Group problem']||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">TRUESEVERITY / URGENCY</div><div class="detail-val">${ticket.TRUESEVERITY_DESC||'—'} / ${ticket.TRUEURGENCY||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">CREATIONDATE</div><div class="detail-val">${ticket.CREATIONDATE||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">TARGETFINISH</div><div class="detail-val">${ticket.TARGETFINISH||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">ค่าปรับ (บาท)</div><div class="detail-val" style="color:var(--red);font-size:18px;font-weight:600">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div></div>
+      <div class="detail-item"><div class="detail-label">PENALTY_FLAG / PENALTYHOUR</div><div class="detail-val">${ticket.PENALTY_FLAG||'—'} / ${ticket.PENALTYHOUR_TRACKB||'—'} hr</div></div>
+      <div class="detail-item"><div class="detail-label">Owner Group (CONTRACTTICKET)</div><div class="detail-val">${ticket['CONTRACTTICKET_TRACKB (groups)']||ticket.CONTRACTTICKET_TRACKB||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">Group Problem (กรอกแล้ว)</div><div class="detail-val">${ticket['Group problem']||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">FSO ตัดสิน</div><div class="detail-val">${resultBadge(fsoDecision)}</div></div>
     </div>
     ${formHTML}
