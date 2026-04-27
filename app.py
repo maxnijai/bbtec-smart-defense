@@ -124,19 +124,41 @@ def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def rows_to_dicts(sheet):
-    records = sheet.get_all_records()
+    """Read sheet handling duplicate column names by renaming them."""
+    all_values = sheet.get_all_values()
+    if not all_values:
+        return []
+    raw_headers = all_values[0]
+    # Deduplicate headers: TICKETID, TICKETID_2, TICKETID_3 ...
+    seen = {}
+    headers = []
+    for h in raw_headers:
+        h = str(h).strip()
+        if h in seen:
+            seen[h] += 1
+            headers.append(f"{h}_{seen[h]}")
+        else:
+            seen[h] = 1
+            headers.append(h)
+    records = []
+    for row in all_values[1:]:
+        # Pad short rows
+        padded = row + [""] * (len(headers) - len(row))
+        records.append(dict(zip(headers, padded)))
     return records
 
 def find_row_index(sheet, ticketid):
-    """Return 1-based row index for a given TICKETID (header is row 1)."""
-    col_values = sheet.col_values(1)  # assumes TICKETID is col A
-    # find header
+    """Return 1-based row index for a given TICKETID (header is row 1).
+    Uses the FIRST column named TICKETID to avoid duplicate-header issues."""
     headers = sheet.row_values(1)
-    if COL_TICKETID in headers:
-        tid_col = headers.index(COL_TICKETID) + 1
-        col_values = sheet.col_values(tid_col)
+    tid_col = 1  # fallback to col A
+    for i, h in enumerate(headers):
+        if str(h).strip() == COL_TICKETID:
+            tid_col = i + 1
+            break
+    col_values = sheet.col_values(tid_col)
     for i, val in enumerate(col_values):
-        if val == ticketid and i > 0:
+        if str(val).strip() == str(ticketid).strip() and i > 0:
             return i + 1
     return None
 
