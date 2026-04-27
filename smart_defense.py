@@ -1,581 +1,444 @@
 import os, json, time, hmac, hashlib, base64, logging, re
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from functools import wraps
+from typing import Dict, List, Any, Tuple
+
 from flask import Blueprint, request, jsonify
 import gspread
 from google.oauth2.service_account import Credentials
 
-bp = Blueprint("smart_defense", __name__, url_prefix="/api/smart-defense")
-log = logging.getLogger("smart_defense")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger('smart_defense')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-SHEET_ID = os.environ.get("SMART_DEFENSE_SHEET_ID", "1RBWr-lKva_XOqmcKwEE-E7hqIodbWWK1XHzuV8QJ-7Q")
-TICKET_SHEET = os.environ.get("SMART_DEFENSE_TICKET_SHEET", "NOR_Penalty_Ticket")
-USER_SHEET = os.environ.get("SMART_DEFENSE_USER_SHEET", "USER_ACCOUNT")
-AUDIT_SHEET = os.environ.get("SMART_DEFENSE_AUDIT_SHEET", "SD_AUDIT_LOG")
-SECRET = os.environ.get("SMART_DEFENSE_SECRET", "bbtec-smart-defense-change-me")
+bp = Blueprint('smart_defense', __name__, url_prefix='/api/smart-defense')
 
-TTL_TICKETS = int(os.environ.get("SMART_DEFENSE_CACHE_TICKETS_SEC", "300"))
-TTL_USERS = int(os.environ.get("SMART_DEFENSE_CACHE_USERS_SEC", "900"))
-MIN_READ_INTERVAL = int(os.environ.get("SMART_DEFENSE_MIN_READ_INTERVAL_SEC", "45"))
+# ====== ENV ======
+SHEET_ID = os.environ.get('SMART_DEFENSE_SHEET_ID', '1RBWr-lKva_XOqmcKwEE-E7hqIodbWWK1XHzuV8QJ-7Q')
+TICKET_SHEET = os.environ.get('SMART_DEFENSE_TICKET_SHEET', 'NOR_Penalty_Ticket')
+USER_SHEET = os.environ.get('SMART_DEFENSE_USER_SHEET', 'USER_ACCOUNT')
+AUDIT_SHEET = os.environ.get('SMART_DEFENSE_AUDIT_SHEET', 'SD_AUDIT_LOG')
+SECRET = os.environ.get('SMART_DEFENSE_SECRET', 'bbtec-2026-secure')
+CACHE_TICKETS_SEC = int(os.environ.get('SMART_DEFENSE_CACHE_TICKETS_SEC', '600'))
+CACHE_USERS_SEC = int(os.environ.get('SMART_DEFENSE_CACHE_USERS_SEC', '900'))
+MIN_READ_INTERVAL_SEC = int(os.environ.get('SMART_DEFENSE_MIN_READ_INTERVAL_SEC', '90'))
+AUDIT_LOGIN = os.environ.get('SMART_DEFENSE_AUDIT_LOGIN', 'FALSE').upper() == 'TRUE'
 
-CACHE = {
-    "tickets": None, "tickets_ts": 0, "tickets_last_read": 0, "tickets_error": None,
-    "users": None, "users_ts": 0, "users_last_read": 0, "users_error": None,
-    "headers": None, "header_map": None,
-}
-
-BASE_HEADERS = [
-    "TICKETID","STATUS","TRUESEVERITY_DESC","TRUEURGENCY","CREATIONDATE","TARGETFINISH",
-    "RESTORATIONDATE","SUBJECT","CATEGORIES","TRUEOWNERGROUP","TrackB_Region","DOWN_TIME_MINUTE"
-]
-
-WORKFLOW_HEADERS = [
-    "Group problem","Sub Problem","Accident","Overdue Detail แนบLINK รูป","แนบ LINK ชี้แจง",
-    "FSO พิจารณา (ปรับ/ไม่ปรับ)","FSO approve (ลงชื่อ FSO)","วันที่ FSO อนุมัติ","Remark FSO",
-    "SD_STEP","SD_LOCK_STEP1","SD_LOCK_STEP2","SD_FINAL_LOCK","SD_DEFEND_COUNT",
-    "SD_STEP1_BY","SD_STEP1_AT","SD_FSO_BY","SD_FSO_AT",
-    "SD_DEFEND1_BY","SD_DEFEND1_AT","SD_DEFEND2_BY","SD_DEFEND2_AT",
-    "SD_FINAL_BY","SD_FINAL_AT","SD_MANAGER_BY","SD_MANAGER_AT","SD_LAST_UPDATE"
-]
-
+# ====== ROLE CONSTANTS ======
 REGION_MAP = {
-    "NOR1": ["TRUE-TH-BBT-NOR1-CMI1-NOP","TRUE-TH-BBT-NOR1-CMI2-NOP","TRUE-TH-BBT-NOR1-CRI-NOP",
-             "TRUE-TH-BBT-NOR1-LPG-NOP","TRUE-TH-BBT-NOR1-LPN-NOP","TRUE-TH-BBT-NOR1-MHS-NOP",
-             "TRUE-TH-BBT-NOR1-NAN-NOP","TRUE-TH-BBT-NOR1-PHE-NOP","TRUE-TH-BBT-NOR1-PYO-NOP"],
-    "NOR2": ["TRUE-TH-BBT-NOR2-KPP-NOP","TRUE-TH-BBT-NOR2-PCB-NOP","TRUE-TH-BBT-NOR2-PCT-NOP",
-             "TRUE-TH-BBT-NOR2-PSN-NOP","TRUE-TH-BBT-NOR2-SKT-NOP","TRUE-TH-BBT-NOR2-TAK-NOP",
-             "TRUE-TH-BBT-NOR2-UTR-NOP"]
+    'TRUE-TH-BBT-NOR1-CMI1-NOP': 'NOR1','TRUE-TH-BBT-NOR1-CMI2-NOP': 'NOR1','TRUE-TH-BBT-NOR1-CRI-NOP': 'NOR1',
+    'TRUE-TH-BBT-NOR1-LPG-NOP': 'NOR1','TRUE-TH-BBT-NOR1-LPN-NOP': 'NOR1','TRUE-TH-BBT-NOR1-MHS-NOP': 'NOR1',
+    'TRUE-TH-BBT-NOR1-NAN-NOP': 'NOR1','TRUE-TH-BBT-NOR1-PHE-NOP': 'NOR1','TRUE-TH-BBT-NOR1-PYO-NOP': 'NOR1',
+    'TRUE-TH-BBT-NOR2-KPP-NOP': 'NOR2','TRUE-TH-BBT-NOR2-PCB-NOP': 'NOR2','TRUE-TH-BBT-NOR2-PCT-NOP': 'NOR2',
+    'TRUE-TH-BBT-NOR2-PSN-NOP': 'NOR2','TRUE-TH-BBT-NOR2-SKT-NOP': 'NOR2','TRUE-TH-BBT-NOR2-TAK-NOP': 'NOR2','TRUE-TH-BBT-NOR2-UTR-NOP': 'NOR2',
 }
-ALIAS = {p.split("-")[-2]: p for arr in REGION_MAP.values() for p in arr}
-ALIAS.update({"CMI": "TRUE-TH-BBT-NOR1-CMI1-NOP"})
+ALIAS = {
+    'CMI1':'TRUE-TH-BBT-NOR1-CMI1-NOP','CMI2':'TRUE-TH-BBT-NOR1-CMI2-NOP','CRI':'TRUE-TH-BBT-NOR1-CRI-NOP',
+    'LPG':'TRUE-TH-BBT-NOR1-LPG-NOP','LPN':'TRUE-TH-BBT-NOR1-LPN-NOP','MHS':'TRUE-TH-BBT-NOR1-MHS-NOP',
+    'NAN':'TRUE-TH-BBT-NOR1-NAN-NOP','PHE':'TRUE-TH-BBT-NOR1-PHE-NOP','PYO':'TRUE-TH-BBT-NOR1-PYO-NOP',
+    'KPP':'TRUE-TH-BBT-NOR2-KPP-NOP','PCB':'TRUE-TH-BBT-NOR2-PCB-NOP','PCT':'TRUE-TH-BBT-NOR2-PCT-NOP',
+    'PSN':'TRUE-TH-BBT-NOR2-PSN-NOP','SKT':'TRUE-TH-BBT-NOR2-SKT-NOP','TAK':'TRUE-TH-BBT-NOR2-TAK-NOP','UTR':'TRUE-TH-BBT-NOR2-UTR-NOP',
+}
 
-def now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+# Existing source headers (read-only display)
+HEADER_ALIASES = {
+    'ticket_id': ['TICKETID','Ticket ID','Ticket','TICKET'],
+    'severity': ['TRUESEVERITY_DESC','SEVERITY','TRUESEVERITY'],
+    'creation': ['CREATIONDATE','Creation Date','CREATEDATE'],
+    'target': ['TARGETFINISH','Target Finish','TARGET_FINISH'],
+    'subject': ['SUBJECT','Subject'],
+    'external': ['EXTERNALSYSTEM_TICKETID','EXTERNAL SYSTEM TICKETID','External Ticket'],
+    'penalty': ['PENALTYBAHT_TRACKB','PENALTY','Penalty','Penalty Baht'],
+    'owner': ['TRUEOWNERGROUP','OWNERGROUP','OWNER_GROUP','Province','PROVINCE'],
+    'region': ['REGION','Region'],
+    'province': ['PROVINCE','Province','TRUEOWNERGROUP'],
+    # editable source columns
+    'group_problem': ['Group problem','GROUP PROBLEM','GROUP_PROBLEM'],
+    'sub_problem': ['Sub Problem','SUB PROBLEM','SUB_PROBLEM'],
+    'accident': ['Accident','ACCIDENT'],
+    'overdue_detail': ['Overdue Detail แนบLINK รูป','Overdue Detail','OVERDUE_DETAIL'],
+    'explain_link': ['แนบ LINK ชี้แจง','Explain Link','EXPLAIN_LINK'],
+    'fso_decision': ['FSO พิจารณา (ปรับ/ไม่ปรับ)','FSO_DECISION'],
+    'fso_approve': ['FSO approve (ลงชื่อ FSO)','FSO_APPROVE'],
+    'fso_approve_date': ['วันที่ FSO อนุมัติ','FSO_APPROVE_DATE'],
+    'fso_remark': ['Remark FSO','FSO_REMARK'],
+}
+
+# Workflow columns - MUST exist in Google Sheet; backend will NOT add headers automatically
+WF_HEADERS = {
+    'sd_step':'SD_STEP',
+    'sd_status':'SD_STATUS',
+    'sd_engineer_confirm':'SD_ENGINEER_CONFIRM',
+    'sd_engineer_confirm_by':'SD_ENGINEER_CONFIRM_BY',
+    'sd_engineer_confirm_at':'SD_ENGINEER_CONFIRM_AT',
+    'sd_fso_confirm':'SD_FSO_CONFIRM',
+    'sd_fso_confirm_by':'SD_FSO_CONFIRM_BY',
+    'sd_fso_confirm_at':'SD_FSO_CONFIRM_AT',
+    'sd_defend_count':'SD_DEFEND_COUNT',
+    'sd_defend_request':'SD_DEFEND_REQUEST',
+    'sd_defend_by':'SD_DEFEND_BY',
+    'sd_defend_at':'SD_DEFEND_AT',
+    'sd_final_status':'SD_FINAL_STATUS',
+    'sd_manager_approve':'SD_MANAGER_APPROVE',
+    'sd_manager_approve_by':'SD_MANAGER_APPROVE_BY',
+    'sd_manager_approve_at':'SD_MANAGER_APPROVE_AT',
+    'sd_updated_by':'SD_UPDATED_BY',
+    'sd_updated_at':'SD_UPDATED_AT',
+}
+
+AUDIT_HEADERS = ['TIME','USER','GROUP','ROLE','ACTION','TICKETID','STEP','DETAIL']
+
+_cache = {'tickets': None, 'ticket_ts': 0, 'ticket_headers': None, 'ticket_colmap': None,
+          'users': None, 'user_ts': 0, 'last_ticket_read_attempt': 0, 'last_error': None}
+
+# ====== UTIL ======
+def now_iso():
+    return datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%d %H:%M:%S')
 
 def norm(v):
-    return str(v or "").strip()
+    return str(v or '').strip()
 
-def norm_up(v):
-    return norm(v).upper().replace(" ", "")
+def norm_key(v):
+    return re.sub(r'\s+', ' ', str(v or '').strip()).upper()
 
-def split_multi(v):
-    s = norm(v)
-    if not s:
-        return []
-    return [x.strip() for x in re.split(r"[,;|]", s) if x.strip()]
+def parse_list(v):
+    if v is None: return []
+    s = str(v).strip()
+    if not s: return []
+    return [x.strip() for x in re.split(r'[,;|]', s) if x.strip()]
 
-def normalize_area(v):
-    s = norm_up(v)
-    if s in ("", "ALL"):
-        return s or "ALL"
+def norm_area(v):
+    s = str(v or '').strip().upper().replace(' ', '')
+    if not s: return ''
+    if s == 'ALL': return 'ALL'
     return ALIAS.get(s, s)
 
-def parse_amount(v):
-    s = str(v or "").replace(",", "").replace("บาท", "").strip()
+def money(v):
     try:
-        return float(s)
+        return float(re.sub(r'[^0-9.\-]', '', str(v or '')) or 0)
     except Exception:
         return 0.0
 
 def get_client():
-    raw = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    raw = os.environ.get('GOOGLE_CREDENTIALS_JSON')
     if not raw:
-        raise RuntimeError("Missing GOOGLE_CREDENTIALS_JSON")
+        raise RuntimeError('Missing GOOGLE_CREDENTIALS_JSON')
     info = json.loads(raw)
-    creds = Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
+    creds = Credentials.from_service_account_info(info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     return gspread.authorize(creds)
 
-def get_ws(name):
+def open_ws(name):
     return get_client().open_by_key(SHEET_ID).worksheet(name)
 
-def ensure_headers(ws):
-    headers = ws.row_values(1)
-    clean = [norm(h) for h in headers]
-    missing = [h for h in WORKFLOW_HEADERS if h not in clean]
-    if missing:
-        start_col = len(clean) + 1
-        ws.update_cell(1, start_col, missing[0]) if len(missing)==1 else ws.update([missing], f"{gspread.utils.rowcol_to_a1(1,start_col)}:{gspread.utils.rowcol_to_a1(1,start_col+len(missing)-1)}")
-        headers = ws.row_values(1)
-        clean = [norm(h) for h in headers]
-        log.info("Added workflow headers: %s", missing)
-    return clean, {h:i+1 for i,h in enumerate(clean)}
+def header_map(headers: List[str]) -> Dict[str,int]:
+    return {norm_key(h): i+1 for i,h in enumerate(headers) if str(h).strip()}
 
-def records_from_values(values):
-    if not values:
-        return [], [], {}
-    headers = [norm(h) for h in values[0]]
-    hmap = {h:i for i,h in enumerate(headers)}
-    rows = []
-    for idx, row in enumerate(values[1:], start=2):
-        d = {"_row": idx}
-        for h, i in hmap.items():
-            d[h] = row[i] if i < len(row) else ""
-        rows.append(d)
-    return rows, headers, hmap
+def find_col(headers, aliases):
+    hm = header_map(headers)
+    for a in aliases:
+        k = norm_key(a)
+        if k in hm: return hm[k]
+    return None
 
-def load_users(force=False):
-    now = time.time()
-    if not force and CACHE["users"] is not None and now - CACHE["users_ts"] < TTL_USERS:
-        return CACHE["users"]
-    if not force and CACHE["users"] is not None and now - CACHE["users_last_read"] < MIN_READ_INTERVAL:
-        return CACHE["users"]
+def get_row_value(row, headers, aliases, default=''):
+    c = find_col(headers, aliases)
+    if not c: return default
+    return row[c-1] if c-1 < len(row) else default
+
+def ensure_workflow_headers_exist(headers):
+    # PRO STABLE: do NOT write headers automatically. Return missing list only.
+    hm = header_map(headers)
+    missing = [h for h in WF_HEADERS.values() if norm_key(h) not in hm]
+    return missing
+
+def sign_token(payload: Dict[str,Any]) -> str:
+    body = base64.urlsafe_b64encode(json.dumps(payload, ensure_ascii=False).encode()).decode().rstrip('=')
+    sig = hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return body + '.' + sig
+
+def read_token(token: str):
     try:
-        CACHE["users_last_read"] = now
-        ws = get_ws(USER_SHEET)
-        rows, headers, hmap = records_from_values(ws.get_all_values())
-        users = []
-        for r in rows:
-            active = norm_up(r.get("Active", "TRUE"))
-            if active not in ("TRUE","1","YES","Y","ACTIVE"):
-                continue
-            users.append({
-                "user": norm(r.get("User")),
-                "pass": norm(r.get("Pass")),
-                "name": norm(r.get("Name") or r.get("User")),
-                "group": norm_up(r.get("Group")),
-                "role": norm_up(r.get("Role")),
-                "region": norm_up(r.get("Region") or "ALL"),
-                "province": norm(r.get("Province") or "ALL"),
-                "systems": [norm_up(x) for x in split_multi(r.get("Systems") or "SMART_DEFENSE")],
-                "active": True,
-            })
-        CACHE["users"], CACHE["users_ts"], CACHE["users_error"] = users, now, None
-        log.info("SD users loaded: %s", len(users))
-        return users
-    except Exception as e:
-        CACHE["users_error"] = str(e)
-        log.exception("load_users error")
-        if CACHE["users"] is not None:
-            return CACHE["users"]
-        raise
-
-def load_tickets(force=False, ensure=True):
-    now = time.time()
-    if not force and CACHE["tickets"] is not None and now - CACHE["tickets_ts"] < TTL_TICKETS:
-        return CACHE["tickets"]
-    if not force and CACHE["tickets"] is not None and now - CACHE["tickets_last_read"] < MIN_READ_INTERVAL:
-        return CACHE["tickets"]
-    try:
-        CACHE["tickets_last_read"] = now
-        ws = get_ws(TICKET_SHEET)
-        if ensure:
-            headers, col_map = ensure_headers(ws)
-        values = ws.get_all_values()
-        rows, headers, hmap0 = records_from_values(values)
-        CACHE["headers"] = headers
-        CACHE["header_map"] = {h:i+1 for i,h in enumerate(headers)}
-        tickets = [normalize_ticket(r) for r in rows if norm(r.get("TICKETID") or r.get("Ticket") or r.get("ticket"))]
-        CACHE["tickets"], CACHE["tickets_ts"], CACHE["tickets_error"] = tickets, now, None
-        log.info("SD tickets loaded: %s from sheet_id=%s tab=%s headers=%s", len(tickets), SHEET_ID, TICKET_SHEET, headers[:15])
-        return tickets
-    except Exception as e:
-        CACHE["tickets_error"] = str(e)
-        log.exception("load_tickets error")
-        if CACHE["tickets"] is not None:
-            return CACHE["tickets"]
-        raise
-
-def normalize_ticket(r):
-    tid = norm(r.get("TICKETID") or r.get("Ticket") or r.get("ticket"))
-    owner = norm(r.get("TRUEOWNERGROUP") or r.get("Province"))
-    region = norm_up(r.get("TrackB_Region") or infer_region(owner))
-    step = norm(r.get("SD_STEP") or "1")
-    try:
-        step_int = int(float(step))
-    except Exception:
-        step_int = 1
-    penalty = parse_amount(r.get("PENALTYBAHT_TRACKB") or r.get("PENALTY") or r.get("Penalty") or r.get("Penalty Amount"))
-    return {
-        "_row": r.get("_row"),
-        "ticket": tid,
-        "raw": r,
-        "step": step_int,
-        "region": region,
-        "province": normalize_area(owner),
-        "province_display": owner,
-        "severity": norm(r.get("TRUESEVERITY_DESC")),
-        "creation": norm(r.get("CREATIONDATE")),
-        "target": norm(r.get("TARGETFINISH")),
-        "subject": norm(r.get("SUBJECT")),
-        "penalty": penalty,
-        "problem": norm(r.get("Group problem")),
-        "sub_problem": norm(r.get("Sub Problem")),
-        "accident": norm(r.get("Accident")),
-        "overdue_link": norm(r.get("Overdue Detail แนบLINK รูป")),
-        "explain_link": norm(r.get("แนบ LINK ชี้แจง")),
-        "fso_decision": norm(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)")),
-        "fso_approve": norm(r.get("FSO approve (ลงชื่อ FSO)")),
-        "fso_date": norm(r.get("วันที่ FSO อนุมัติ")),
-        "fso_remark": norm(r.get("Remark FSO")),
-        "defend_count": int(float(r.get("SD_DEFEND_COUNT") or 0)),
-        "lock1": norm_up(r.get("SD_LOCK_STEP1")) in ("TRUE","YES","1","LOCK"),
-        "lock2": norm_up(r.get("SD_LOCK_STEP2")) in ("TRUE","YES","1","LOCK"),
-        "final_lock": norm_up(r.get("SD_FINAL_LOCK")) in ("TRUE","YES","1","LOCK"),
-        "last_update": norm(r.get("SD_LAST_UPDATE")),
-        "step1_by": norm(r.get("SD_STEP1_BY")),
-        "fso_by": norm(r.get("SD_FSO_BY")),
-        "final_by": norm(r.get("SD_FINAL_BY")),
-        "manager_by": norm(r.get("SD_MANAGER_BY")),
-    }
-
-def infer_region(owner):
-    s = norm_up(owner)
-    if "NOR1" in s:
-        return "NOR1"
-    if "NOR2" in s:
-        return "NOR2"
-    return ""
-
-def sign_token(payload):
-    data = dict(payload)
-    data["exp"] = int(time.time()) + 60*60*12
-    raw = base64.urlsafe_b64encode(json.dumps(data, ensure_ascii=False).encode()).decode().rstrip("=")
-    sig = hmac.new(SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-    return raw + "." + sig
-
-def verify_token(token):
-    try:
-        raw, sig = token.split(".", 1)
-        good = hmac.new(SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, good):
-            return None
-        data = json.loads(base64.urlsafe_b64decode(raw + "="*((4-len(raw)%4)%4)).decode())
-        if data.get("exp", 0) < time.time():
-            return None
-        return data
+        body, sig = token.split('.',1)
+        expected = hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected): return None
+        pad = '=' * (-len(body) % 4)
+        return json.loads(base64.urlsafe_b64decode((body+pad).encode()).decode())
     except Exception:
         return None
 
-def current_user():
-    auth = request.headers.get("Authorization", "")
-    token = auth.replace("Bearer ", "").strip()
-    data = verify_token(token) if token else None
-    return data
-
-def require_auth(fn):
+def auth_required(fn):
     @wraps(fn)
     def wrap(*args, **kwargs):
-        u = current_user()
-        if not u:
-            return jsonify({"ok": False, "error": "unauthorized"}), 401
-        request.user = u
+        auth = request.headers.get('Authorization','')
+        token = auth.replace('Bearer ','').strip() if auth.startswith('Bearer ') else ''
+        user = read_token(token)
+        if not user:
+            return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+        request.user = user
         return fn(*args, **kwargs)
     return wrap
 
+# ====== USERS ======
+def load_users(force=False):
+    if (not force) and _cache['users'] is not None and time.time() - _cache['user_ts'] < CACHE_USERS_SEC:
+        return _cache['users']
+    ws = open_ws(USER_SHEET)
+    values = ws.get_all_values()
+    if not values: return []
+    headers = values[0]
+    rows = []
+    for r in values[1:]:
+        if not any(r): continue
+        d = {headers[i].strip(): (r[i].strip() if i < len(r) else '') for i in range(len(headers)) if headers[i].strip()}
+        if str(d.get('Active','')).strip().upper() in ('TRUE','YES','1','ACTIVE'):
+            rows.append(d)
+    _cache['users'] = rows; _cache['user_ts'] = time.time()
+    return rows
+
+def clean_user(u):
+    return {
+        'user': norm(u.get('User')),
+        'name': norm(u.get('Name') or u.get('User')),
+        'group': norm(u.get('Group')).upper(),
+        'role': norm(u.get('Role')).upper(),
+        'region': norm(u.get('Region')).upper() or 'ALL',
+        'province': norm(u.get('Province')).upper() or 'ALL',
+        'systems': norm(u.get('Systems')).upper() or 'SMART_DEFENSE',
+    }
+
+# ====== TICKETS ======
+def load_tickets(force=False):
+    now = time.time()
+    if (not force) and _cache['tickets'] is not None and now - _cache['ticket_ts'] < CACHE_TICKETS_SEC:
+        return _cache['tickets']
+    if (not force) and now - _cache['last_ticket_read_attempt'] < MIN_READ_INTERVAL_SEC and _cache['tickets'] is not None:
+        return _cache['tickets']
+    _cache['last_ticket_read_attempt'] = now
+    try:
+        ws = open_ws(TICKET_SHEET)
+        values = ws.get_all_values()  # one read only
+        if not values:
+            _cache['tickets'] = []; _cache['ticket_ts'] = now; return []
+        headers = [str(h).strip() for h in values[0]]
+        missing_wf = ensure_workflow_headers_exist(headers)
+        hm = header_map(headers)
+        tickets = []
+        for idx, row in enumerate(values[1:], start=2):
+            if not any(row): continue
+            ticket_id = norm(get_row_value(row, headers, HEADER_ALIASES['ticket_id']))
+            if not ticket_id: continue
+            owner = norm(get_row_value(row, headers, HEADER_ALIASES['owner']))
+            province = norm(get_row_value(row, headers, HEADER_ALIASES['province'])) or owner
+            province_n = norm_area(province)
+            region = norm(get_row_value(row, headers, HEADER_ALIASES['region'])).upper() or REGION_MAP.get(province_n, '')
+            step = norm(row[hm[norm_key('SD_STEP')]-1]) if norm_key('SD_STEP') in hm and hm[norm_key('SD_STEP')]-1 < len(row) else '1'
+            if not step: step = '1'
+            status = norm(row[hm[norm_key('SD_STATUS')]-1]) if norm_key('SD_STATUS') in hm and hm[norm_key('SD_STATUS')]-1 < len(row) else 'STEP1'
+            t = {
+                '_row': idx, 'ticket_id': ticket_id, 'severity': norm(get_row_value(row, headers, HEADER_ALIASES['severity'])),
+                'creation': norm(get_row_value(row, headers, HEADER_ALIASES['creation'])), 'target': norm(get_row_value(row, headers, HEADER_ALIASES['target'])),
+                'subject': norm(get_row_value(row, headers, HEADER_ALIASES['subject'])), 'external': norm(get_row_value(row, headers, HEADER_ALIASES['external'])),
+                'penalty': money(get_row_value(row, headers, HEADER_ALIASES['penalty'])), 'penalty_raw': norm(get_row_value(row, headers, HEADER_ALIASES['penalty'])),
+                'owner': owner, 'province': province_n or province, 'region': region, 'step': step, 'status': status,
+                'group_problem': norm(get_row_value(row, headers, HEADER_ALIASES['group_problem'])),
+                'sub_problem': norm(get_row_value(row, headers, HEADER_ALIASES['sub_problem'])),
+                'accident': norm(get_row_value(row, headers, HEADER_ALIASES['accident'])),
+                'overdue_detail': norm(get_row_value(row, headers, HEADER_ALIASES['overdue_detail'])),
+                'explain_link': norm(get_row_value(row, headers, HEADER_ALIASES['explain_link'])),
+                'fso_decision': norm(get_row_value(row, headers, HEADER_ALIASES['fso_decision'])),
+                'fso_approve': norm(get_row_value(row, headers, HEADER_ALIASES['fso_approve'])),
+                'fso_approve_date': norm(get_row_value(row, headers, HEADER_ALIASES['fso_approve_date'])),
+                'fso_remark': norm(get_row_value(row, headers, HEADER_ALIASES['fso_remark'])),
+                'defend_count': int(float(norm(row[hm[norm_key('SD_DEFEND_COUNT')]-1] or 0))) if norm_key('SD_DEFEND_COUNT') in hm and hm[norm_key('SD_DEFEND_COUNT')]-1 < len(row) and str(row[hm[norm_key('SD_DEFEND_COUNT')]-1]).strip() else 0,
+                'final_status': norm(row[hm[norm_key('SD_FINAL_STATUS')]-1]) if norm_key('SD_FINAL_STATUS') in hm and hm[norm_key('SD_FINAL_STATUS')]-1 < len(row) else '',
+            }
+            tickets.append(t)
+        _cache['tickets'] = tickets; _cache['ticket_ts'] = now; _cache['ticket_headers'] = headers; _cache['ticket_colmap'] = hm; _cache['last_error'] = None
+        if missing_wf:
+            _cache['last_error'] = {'type':'missing_headers', 'missing': missing_wf, 'message':'Workflow columns are missing. Add them manually to the sheet. Backend will not auto-add columns.'}
+        return tickets
+    except Exception as e:
+        log.exception('load_tickets error')
+        _cache['last_error'] = {'type':'load_error','message':str(e)}
+        return _cache['tickets'] or []
+
 def allowed_ticket(user, t):
-    if "SMART_DEFENSE" not in user.get("systems", ["SMART_DEFENSE"]):
+    if user.get('region','ALL') != 'ALL' and (t.get('region') or '').upper() != user.get('region'):
         return False
-    ureg = norm_up(user.get("region") or "ALL")
-    if ureg != "ALL" and norm_up(t.get("region")) != ureg:
-        return False
-    provs_raw = split_multi(user.get("province") or "ALL")
-    provs = [normalize_area(p) for p in provs_raw] or ["ALL"]
-    if "ALL" not in [norm_up(p) for p in provs] and normalize_area(t.get("province")) not in provs:
+    user_provs = [norm_area(x) for x in parse_list(user.get('province','ALL'))]
+    if 'ALL' not in user_provs and norm_area(t.get('province')) not in user_provs:
         return False
     return True
 
-def can_step1(user):
-    return user.get("group") in ("ENGINEER","SITE") or user.get("role") in ("ENGINEER_ZONE","SITE_SUP")
+def col_for(field_key):
+    headers = _cache.get('ticket_headers') or []
+    hm = _cache.get('ticket_colmap') or header_map(headers)
+    # workflow header key
+    if field_key in WF_HEADERS:
+        return hm.get(norm_key(WF_HEADERS[field_key]))
+    # display/edit alias key
+    if field_key in HEADER_ALIASES:
+        return find_col(headers, HEADER_ALIASES[field_key])
+    return None
 
-def can_step2(user):
-    return user.get("group") == "FSO" or user.get("role") in ("FSO_ZONE","FSO_MANAGER","FSO_REGIONAL")
-
-def can_manager(user):
-    return user.get("group") == "BBTEC" or user.get("role") in ("BBTEC_MANAGER","BBTEC_REGIONAL")
-
-def ticket_by_id(ticket_id):
-    for t in load_tickets():
-        if norm(t["ticket"]) == norm(ticket_id):
+def row_by_ticket(ticket_id):
+    rows = load_tickets()
+    for t in rows:
+        if t['ticket_id'] == ticket_id:
             return t
     return None
 
-def get_col_map():
-    if not CACHE.get("header_map"):
-        ws = get_ws(TICKET_SHEET)
-        headers, col_map = ensure_headers(ws)
-        CACHE["headers"], CACHE["header_map"] = headers, col_map
-    return CACHE["header_map"]
-
-def update_row(row_num, updates):
-    ws = get_ws(TICKET_SHEET)
-    col_map = get_col_map()
+def update_cells(row_num:int, updates:Dict[str,Any]):
+    ws = open_ws(TICKET_SHEET)
+    # validate columns exist; DO NOT auto-add
+    missing = []
     cells = []
-    for k, v in updates.items():
-        if k not in col_map:
-            headers, col_map = ensure_headers(ws)
-            CACHE["headers"], CACHE["header_map"] = headers, col_map
-        col = col_map[k]
-        cells.append(gspread.Cell(row_num, col, v))
+    for key,val in updates.items():
+        col = col_for(key)
+        if not col:
+            missing.append(key)
+        else:
+            cells.append(gspread.Cell(row_num, col, val))
+    if missing:
+        return False, f'Missing columns for fields: {missing}. Please add workflow/edit headers manually.'
     if cells:
-        ws.update_cells(cells, value_input_option="USER_ENTERED")
-    CACHE["tickets_ts"] = 0
+        ws.update_cells(cells, value_input_option='USER_ENTERED')
+    _cache['tickets'] = None; _cache['ticket_ts'] = 0
+    return True, 'updated'
 
-def append_audit(user, action, ticket, step="", detail=None):
+def can_action(user, t, action):
+    g = user.get('group','').upper(); role = user.get('role','').upper(); step = str(t.get('step','1'))
+    if t.get('final_status') or t.get('status') in ('FINAL','MANAGER_APPROVED'):
+        return action in ('open',)
+    if action in ('save_step1','confirm_step1'):
+        return step in ('1','STEP1') and g in ('ENGINEER','SITE')
+    if action in ('fso_decision','confirm_step2'):
+        return step in ('2','STEP2','3','STEP3') and g == 'FSO'
+    if action in ('request_defend','accept_final'):
+        return step in ('3','STEP3') and g in ('ENGINEER','SITE')
+    if action in ('manager_approve',):
+        return step in ('5','STEP5') and g == 'BBTEC'
+    return False
+
+def audit(user, action, ticket_id='', step='', detail=None):
     try:
-        ss = get_client().open_by_key(SHEET_ID)
-        try:
-            ws = ss.worksheet(AUDIT_SHEET)
-        except Exception:
-            ws = ss.add_worksheet(AUDIT_SHEET, rows=1000, cols=10)
-            ws.append_row(["Time","User","Name","Group","Role","Action","Ticket","Step","Detail","IP"])
-        ws.append_row([
-            now_str(), user.get("user"), user.get("name"), user.get("group"), user.get("role"),
-            action, ticket, step, json.dumps(detail or {}, ensure_ascii=False), request.remote_addr or ""
-        ], value_input_option="USER_ENTERED")
+        ws = open_ws(AUDIT_SHEET)
+    except Exception:
+        return
+    try:
+        vals = ws.get_all_values()
+        if not vals:
+            ws.append_row(AUDIT_HEADERS, value_input_option='USER_ENTERED')
+        ws.append_row([now_iso(), user.get('user',''), user.get('group',''), user.get('role',''), action, ticket_id, step, json.dumps(detail or {}, ensure_ascii=False)], value_input_option='USER_ENTERED')
     except Exception as e:
-        log.warning("audit failed: %s", e)
+        log.warning('audit failed: %s', e)
 
-@bp.route("/login", methods=["POST"])
+# ====== ROUTES ======
+@bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json(force=True) or {}
-    username = norm(data.get("user") or data.get("username"))
-    password = norm(data.get("pass") or data.get("password"))
+    data = request.get_json(silent=True) or {}
+    username = norm(data.get('user') or data.get('username'))
+    password = norm(data.get('pass') or data.get('password'))
     for u in load_users():
-        if norm_up(u["user"]) == norm_up(username) and u["pass"] == password:
-            public = {k:v for k,v in u.items() if k != "pass"}
-            return jsonify({"ok": True, "token": sign_token(public), "user": public})
-    return jsonify({"ok": False, "error": "invalid username/password"}), 401
+        if norm(u.get('User')) == username and norm(u.get('Pass')) == password:
+            cu = clean_user(u)
+            token = sign_token({**cu, 'iat': int(time.time())})
+            if AUDIT_LOGIN: audit(cu, 'LOGIN')
+            return jsonify({'ok': True, 'token': token, 'user': cu})
+    return jsonify({'ok': False, 'error': 'invalid user/password'}), 401
 
-@bp.route("/me")
-@require_auth
+@bp.route('/me')
+@auth_required
 def me():
-    return jsonify({"ok": True, "user": request.user})
+    return jsonify({'ok': True, 'user': request.user})
 
-@bp.route("/cache-status")
-@require_auth
-def cache_status():
-    return jsonify({
-        "ok": True,
-        "sheet_id": SHEET_ID,
-        "ticket_sheet": TICKET_SHEET,
-        "user_sheet": USER_SHEET,
-        "cache": {
-            "tickets_cached": CACHE["tickets"] is not None,
-            "ticket_count_cached": len(CACHE["tickets"] or []),
-            "tickets_age_sec": round(time.time()-CACHE["tickets_ts"],1) if CACHE["tickets_ts"] else None,
-            "tickets_error": CACHE["tickets_error"],
-            "users_cached": CACHE["users"] is not None,
-            "user_count_cached": len(CACHE["users"] or []),
-            "users_error": CACHE["users_error"],
-            "headers": CACHE["headers"][:30] if CACHE["headers"] else None,
-        },
-        "updated_at": now_str()
-    })
-
-@bp.route("/debug")
-@require_auth
-def debug():
-    rows = load_tickets(force=request.args.get("force")=="1")
-    allowed = [t for t in rows if allowed_ticket(request.user, t)]
-    sample = [{k:t.get(k) for k in ("ticket","region","province_display","province","step","penalty","subject")} for t in allowed[:5]]
-    return jsonify({"ok": True, "raw_count": len(rows), "allowed_count": len(allowed), "sample": sample, "user": request.user, "cache_error": CACHE["tickets_error"]})
-
-@bp.route("/clear-cache", methods=["POST","GET"])
-@require_auth
-def clear_cache():
-    CACHE["tickets"] = None; CACHE["tickets_ts"] = 0; CACHE["users"] = None; CACHE["users_ts"] = 0
-    return jsonify({"ok": True})
-
-@bp.route("/tickets")
-@require_auth
+@bp.route('/tickets')
+@auth_required
 def tickets():
-    q = norm_up(request.args.get("q"))
-    step = norm(request.args.get("step"))
     rows = [t for t in load_tickets() if allowed_ticket(request.user, t)]
-    if step and step.lower() not in ("all","ทุก step","ทุกstep"):
-        try:
-            s = int(step)
-            rows = [t for t in rows if t["step"] == s]
-        except Exception:
-            pass
+    q = norm(request.args.get('q')).lower()
+    step = norm(request.args.get('step'))
     if q:
-        rows = [t for t in rows if q in norm_up(t["ticket"]+" "+t["subject"]+" "+t["province_display"]+" "+t["severity"])]
-    sort = request.args.get("sort") or "penalty"
-    direction = request.args.get("dir") or "desc"
-    rows.sort(key=lambda x: x.get(sort) if sort != "penalty" else x.get("penalty",0), reverse=(direction=="desc"))
-    out = [{k:v for k,v in t.items() if k != "raw"} for t in rows]
-    summary = make_summary(rows)
-    return jsonify({"ok": True, "rows": out, "total": len(out), "total_amount": sum(t["penalty"] for t in rows), "summary": summary, "updated_at": now_str()})
+        rows = [r for r in rows if q in json.dumps(r, ensure_ascii=False).lower()]
+    if step and step.upper() != 'ALL':
+        rows = [r for r in rows if str(r.get('step')) == str(step)]
+    total_penalty = sum(r.get('penalty',0) for r in rows)
+    return jsonify({'ok': True, 'rows': rows, 'total': len(rows), 'total_penalty': total_penalty, 'warning': _cache.get('last_error')})
 
-def make_summary(rows):
-    return {
-        "total": len(rows),
-        "amount": sum(t["penalty"] for t in rows),
-        "step1_done": sum(1 for t in rows if t.get("lock1")),
-        "fso_penalty": sum(1 for t in rows if "ปรับ" == t.get("fso_decision")),
-        "fso_no_penalty": sum(1 for t in rows if "ไม่ปรับ" == t.get("fso_decision")),
-        "defend": sum(1 for t in rows if t.get("defend_count",0)>0),
-        "final": sum(1 for t in rows if t.get("final_lock")),
-        "approved": sum(1 for t in rows if t.get("manager_by")),
-    }
+@bp.route('/debug')
+@auth_required
+def debug():
+    raw = load_tickets()
+    allowed = [t for t in raw if allowed_ticket(request.user, t)]
+    return jsonify({'ok': True, 'sheet_id': SHEET_ID, 'ticket_sheet': TICKET_SHEET, 'user_sheet': USER_SHEET,
+                    'raw_count': len(raw), 'allowed_count': len(allowed), 'user': request.user,
+                    'headers': _cache.get('ticket_headers'), 'last_error': _cache.get('last_error'),
+                    'cache_age_sec': int(time.time()-(_cache.get('ticket_ts') or 0)) if _cache.get('ticket_ts') else None})
 
-@bp.route("/ticket/<ticket_id>")
-@require_auth
+@bp.route('/clear-cache', methods=['POST'])
+@auth_required
+def clear_cache():
+    _cache['tickets'] = None; _cache['users'] = None; _cache['ticket_ts'] = 0; _cache['user_ts'] = 0
+    return jsonify({'ok': True})
+
+@bp.route('/ticket/<ticket_id>')
+@auth_required
 def ticket_detail(ticket_id):
-    t = ticket_by_id(ticket_id)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not found or not allowed"}), 404
-    return jsonify({"ok": True, "ticket": {k:v for k,v in t.items() if k != "raw"}, "raw": t["raw"], "permissions": ticket_permissions(request.user, t)})
+    t = row_by_ticket(ticket_id)
+    if not t or not allowed_ticket(request.user, t): return jsonify({'ok': False, 'error': 'not found'}), 404
+    actions = {a: can_action(request.user, t, a) for a in ['save_step1','confirm_step1','fso_decision','confirm_step2','request_defend','accept_final','manager_approve']}
+    return jsonify({'ok': True, 'ticket': t, 'actions': actions, 'warning': _cache.get('last_error')})
 
-def ticket_permissions(user, t):
-    return {
-        "can_edit_step1": can_step1(user) and t["step"] == 1 and not t["lock1"] and not t["final_lock"],
-        "can_confirm_step1": can_step1(user) and t["step"] == 1 and not t["lock1"] and not t["final_lock"],
-        "can_fso": can_step2(user) and t["step"] in (2,3) and not t["final_lock"],
-        "can_defend": can_step1(user) and t["step"] == 3 and t.get("defend_count",0) < 2 and not t["final_lock"],
-        "can_accept_final": can_step1(user) and t["step"] == 3 and not t["final_lock"],
-        "can_manager_approve": can_manager(user) and t["step"] == 5 and not t.get("manager_by") and not t["final_lock"],
-    }
+@bp.route('/action/<action>', methods=['POST'])
+@auth_required
+def do_action(action):
+    data = request.get_json(silent=True) or {}
+    ticket_id = norm(data.get('ticket_id'))
+    t = row_by_ticket(ticket_id)
+    if not t or not allowed_ticket(request.user, t): return jsonify({'ok': False, 'error':'ticket not found'}), 404
+    if not can_action(request.user, t, action): return jsonify({'ok': False, 'error':'permission denied or step locked'}), 403
+    user = request.user; ts = now_iso(); updates = {'sd_updated_by': user.get('user'), 'sd_updated_at': ts}
+    detail = {}
+    if action == 'save_step1':
+        for key in ['group_problem','sub_problem','accident','overdue_detail','explain_link']:
+            if key in data: updates[key] = data.get(key,''); detail[key] = data.get(key,'')
+    elif action == 'confirm_step1':
+        updates.update({'sd_step':'2','sd_status':'STEP2_FSO_REVIEW','sd_engineer_confirm':'TRUE','sd_engineer_confirm_by':user.get('user'),'sd_engineer_confirm_at':ts})
+    elif action == 'fso_decision':
+        for key in ['fso_decision','fso_approve','fso_approve_date','fso_remark']:
+            if key in data: updates[key] = data.get(key,''); detail[key] = data.get(key,'')
+    elif action == 'confirm_step2':
+        # ถ้า FSO ไม่ปรับ => final/manager step, ถ้าปรับ => engineer defend step
+        decision = norm(data.get('fso_decision') or t.get('fso_decision'))
+        if decision == 'ไม่ปรับ':
+            next_step, status = '5', 'STEP5_MANAGER_APPROVE'
+        else:
+            next_step, status = '3', 'STEP3_DEFEND_DECISION'
+        updates.update({'sd_step':next_step,'sd_status':status,'sd_fso_confirm':'TRUE','sd_fso_confirm_by':user.get('user'),'sd_fso_confirm_at':ts})
+        for key in ['fso_decision','fso_approve','fso_approve_date','fso_remark']:
+            if key in data: updates[key] = data.get(key,'')
+    elif action == 'request_defend':
+        cnt = int(t.get('defend_count') or 0)
+        if cnt >= 2: return jsonify({'ok': False, 'error':'defend limit reached'}), 400
+        updates.update({'sd_step':'2','sd_status':'STEP2_FSO_REVIEW_DEFEND','sd_defend_count':cnt+1,'sd_defend_request':'TRUE','sd_defend_by':user.get('user'),'sd_defend_at':ts})
+        if 'explain_link' in data: updates['explain_link'] = data.get('explain_link','')
+        if 'overdue_detail' in data: updates['overdue_detail'] = data.get('overdue_detail','')
+    elif action == 'accept_final':
+        updates.update({'sd_step':'5','sd_status':'STEP5_MANAGER_APPROVE','sd_final_status':'ACCEPT_PENALTY'})
+    elif action == 'manager_approve':
+        updates.update({'sd_step':'FINAL','sd_status':'MANAGER_APPROVED','sd_final_status':'FINAL','sd_manager_approve':'TRUE','sd_manager_approve_by':user.get('user'),'sd_manager_approve_at':ts})
+    ok, msg = update_cells(t['_row'], updates)
+    if not ok: return jsonify({'ok': False, 'error': msg}), 400
+    audit(user, action, ticket_id, t.get('step'), {'updates': updates, 'detail': detail})
+    return jsonify({'ok': True, 'message': msg})
 
-@bp.route("/step1/save", methods=["POST"])
-@require_auth
-def step1_save():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    if not ticket_permissions(request.user, t)["can_edit_step1"]:
-        return jsonify({"ok": False, "error": "step1 locked or no permission"}), 403
-    updates = {
-        "Group problem": norm(data.get("problem")),
-        "Sub Problem": norm(data.get("sub_problem")),
-        "Accident": norm(data.get("accident")),
-        "Overdue Detail แนบLINK รูป": norm(data.get("overdue_link")),
-        "แนบ LINK ชี้แจง": norm(data.get("explain_link")),
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "STEP1_SAVE", tid, "1", updates)
-    return jsonify({"ok": True})
-
-@bp.route("/step1/confirm", methods=["POST"])
-@require_auth
-def step1_confirm():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    if not ticket_permissions(request.user, t)["can_confirm_step1"]:
-        return jsonify({"ok": False, "error": "step1 locked or no permission"}), 403
-    updates = {
-        "SD_STEP": 2,
-        "SD_LOCK_STEP1": "TRUE",
-        "SD_STEP1_BY": request.user.get("name") or request.user.get("user"),
-        "SD_STEP1_AT": now_str(),
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "STEP1_CONFIRM", tid, "1", updates)
-    return jsonify({"ok": True, "next_step": 2})
-
-@bp.route("/fso/decision", methods=["POST"])
-@require_auth
-def fso_decision():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    if not ticket_permissions(request.user, t)["can_fso"]:
-        return jsonify({"ok": False, "error": "fso no permission or locked"}), 403
-    decision = norm(data.get("decision"))
-    if decision not in ("ปรับ","ไม่ปรับ"):
-        return jsonify({"ok": False, "error": "decision must be ปรับ or ไม่ปรับ"}), 400
-    # If FSO says ปรับ -> Step3 for engineer defend. If ไม่ปรับ -> Step4 final.
-    next_step = 3 if decision == "ปรับ" else 4
-    updates = {
-        "FSO พิจารณา (ปรับ/ไม่ปรับ)": decision,
-        "FSO approve (ลงชื่อ FSO)": norm(data.get("approve") or request.user.get("name") or request.user.get("user")),
-        "วันที่ FSO อนุมัติ": norm(data.get("date") or now_str().split()[0]),
-        "Remark FSO": norm(data.get("remark")),
-        "SD_STEP": next_step,
-        "SD_LOCK_STEP2": "TRUE",
-        "SD_FSO_BY": request.user.get("name") or request.user.get("user"),
-        "SD_FSO_AT": now_str(),
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "FSO_DECISION", tid, "2", updates)
-    return jsonify({"ok": True, "next_step": next_step})
-
-@bp.route("/defend/request", methods=["POST"])
-@require_auth
-def defend_request():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    if not ticket_permissions(request.user, t)["can_defend"]:
-        return jsonify({"ok": False, "error": "defend not allowed or max 2"}), 403
-    n = int(t.get("defend_count",0)) + 1
-    updates = {
-        "SD_DEFEND_COUNT": n,
-        "SD_STEP": 2,  # send back to FSO review again
-        f"SD_DEFEND{n}_BY": request.user.get("name") or request.user.get("user"),
-        f"SD_DEFEND{n}_AT": now_str(),
-        "SD_LOCK_STEP2": "",  # unlock FSO recheck
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "DEFEND_REQUEST", tid, "3", {"count": n, "remark": data.get("remark")})
-    return jsonify({"ok": True, "defend_count": n, "next_step": 2})
-
-@bp.route("/final/accept", methods=["POST"])
-@require_auth
-def final_accept():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    # Engineer can accept after FSO ปรับ, or anyone allowed can finalize no-penalty in step4.
-    if not (ticket_permissions(request.user, t)["can_accept_final"] or (t["step"]==4 and (can_step1(request.user) or can_step2(request.user) or can_manager(request.user)))):
-        return jsonify({"ok": False, "error": "final accept not allowed"}), 403
-    updates = {
-        "SD_STEP": 5,
-        "SD_FINAL_LOCK": "TRUE",
-        "SD_FINAL_BY": request.user.get("name") or request.user.get("user"),
-        "SD_FINAL_AT": now_str(),
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "FINAL_ACCEPT", tid, "4", updates)
-    return jsonify({"ok": True, "next_step": 5})
-
-@bp.route("/manager/approve", methods=["POST"])
-@require_auth
-def manager_approve():
-    data = request.get_json(force=True) or {}
-    tid = data.get("ticket")
-    t = ticket_by_id(tid)
-    if not t or not allowed_ticket(request.user, t):
-        return jsonify({"ok": False, "error": "not allowed"}), 403
-    if not can_manager(request.user):
-        return jsonify({"ok": False, "error": "manager permission required"}), 403
-    updates = {
-        "SD_STEP": 5,
-        "SD_FINAL_LOCK": "TRUE",
-        "SD_MANAGER_BY": request.user.get("name") or request.user.get("user"),
-        "SD_MANAGER_AT": now_str(),
-        "SD_LAST_UPDATE": now_str()
-    }
-    update_row(t["_row"], updates)
-    append_audit(request.user, "MANAGER_APPROVE", tid, "5", updates)
-    return jsonify({"ok": True})
-
-@bp.route("/audit/<ticket_id>")
-@require_auth
-def audit(ticket_id):
+@bp.route('/audit')
+@auth_required
+def audit_list():
     try:
-        ws = get_ws(AUDIT_SHEET)
-        rows, headers, hmap = records_from_values(ws.get_all_values())
-        rows = [r for r in rows if norm(r.get("Ticket")) == norm(ticket_id)]
-        return jsonify({"ok": True, "rows": rows[-100:]})
+        ws = open_ws(AUDIT_SHEET); vals = ws.get_all_values()
+        if not vals: return jsonify({'ok': True, 'rows': []})
+        headers = vals[0]
+        rows = [{headers[i]: (r[i] if i < len(r) else '') for i in range(len(headers))} for r in vals[1:][-500:]]
+        return jsonify({'ok': True, 'rows': rows})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e), "rows": []})
+        return jsonify({'ok': False, 'error': str(e), 'rows': []})
