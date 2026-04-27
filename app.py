@@ -11,19 +11,26 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("SECRET_KEY", "bbtec-smart-defense-2026")
 
 # ─────────────────────────────────────────────
-# Google Sheets Setup
+# Google Sheets Setup (lazy init — no crash on boot)
 # ─────────────────────────────────────────────
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1RBWr-lKva_XOqmcKwEE-E7hqIodbWWK1XHzuV8QJ-7Q")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+_gc_client = None
 
 def get_gc():
+    global _gc_client
+    if _gc_client is not None:
+        return _gc_client
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         info = json.loads(creds_json)
         creds = Credentials.from_service_account_info(info, scopes=SCOPES)
-    else:
+    elif os.path.exists("credentials.json"):
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-    return gspread.authorize(creds)
+    else:
+        raise RuntimeError("ไม่พบ GOOGLE_CREDENTIALS_JSON หรือ credentials.json")
+    _gc_client = gspread.authorize(creds)
+    return _gc_client
 
 def get_sheet(sheet_name):
     gc = get_gc()
@@ -604,6 +611,13 @@ def serve_frontend(path):
     if path and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
+
+# ─────────────────────────────────────────────
+# Health check (Railway uses this — no auth needed)
+# ─────────────────────────────────────────────
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "service": "BBTEC Smart Defense"}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
