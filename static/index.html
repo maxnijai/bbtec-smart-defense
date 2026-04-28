@@ -134,7 +134,9 @@
   .topbar-title{font-size:15px;font-weight:600}
   .topbar-sub{font-size:12px;color:var(--muted);margin-left:auto}
   .page{padding:20px 24px;display:none}
+  .page{display:none}
   .page.active{display:block}
+  .page.active.flex-page{display:flex!important}
 
   /* ── KPI Cards ── */
   .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
@@ -411,9 +413,9 @@
     </div>
 
     <!-- Page: Dashboard -->
-    <div class="page active" id="page-dashboard" style="padding:10px 18px;display:flex;flex-direction:column;gap:8px;height:calc(100vh - 54px);overflow:hidden">
+    <div class="page active flex-page" id="page-dashboard" style="padding:10px 18px;flex-direction:column;gap:8px;height:calc(100vh - 54px);overflow:hidden">
       <div id="dashboard-loading" class="loading"><div class="spinner"></div> กำลังโหลดข้อมูล...</div>
-      <div id="dashboard-content" style="display:none;flex-direction:column;gap:8px;flex:1;overflow:hidden">
+      <div id="dashboard-content" style="display:none;flex-direction:column;gap:8px;flex:1;overflow:hidden;min-height:0">
         <!-- KPI Banner (compact) -->
         <div id="kpi-grid"></div>
         <!-- Bottom row: Pivot + Chart — fills remaining space -->
@@ -585,11 +587,18 @@ async function doLogout(){
 function initApp(user){
   $('login-screen').style.display = 'none';
   $('app').classList.add('visible');
-  const initials = user.user?.substring(0,2).toUpperCase() || '??';
+  const initials = (user.user||'??').substring(0,2).toUpperCase();
   $('sb-avatar').textContent = initials;
   $('sb-name').textContent = user.user;
   $('sb-role').textContent = user.role;
   $('sb-region').textContent = user.region || 'NOR';
+  // Reset all pages, show dashboard
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active','flex-page');
+    p.style.display = '';
+  });
+  const dash = $('page-dashboard');
+  dash.classList.add('active','flex-page');
   loadDashboard();
   loadTickets();
 }
@@ -600,7 +609,9 @@ function showPage(page){
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = $(`page-${page}`);
   pg.classList.add('active');
-  pg.style.display = page==='dashboard' ? 'flex' : 'block';
+  // dashboard needs flex, others block
+  if(page==='dashboard') pg.classList.add('flex-page');
+  else pg.classList.remove('flex-page');
   document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
   const titles = {
     dashboard:'Dashboard',tickets:'Ticket ทั้งหมด',
@@ -873,15 +884,42 @@ async function loadTickets(){
     });
     $('tickets-loading').style.display='none';
     $('ticket-table').style.display='table';
-    // Populate province filter
-    const provinces = [...new Set(allTickets.map(t=>t.TrackB_Region||'').filter(Boolean))].sort();
+    // Province filter from TRUEOWNERGROUP values in tickets
+    const allGroups = [...new Set(allTickets.map(t=>t.TRUEOWNERGROUP||'').filter(Boolean))].sort();
     const pSel = $('filter-province');
-    if(pSel) provinces.forEach(p => {
-      const o = document.createElement('option'); o.value=p; o.textContent=p; pSel.appendChild(o);
-    });
-    // Auto-select user's province if set
-    const userProvince = currentUser?.province||'';
-    if(userProvince && pSel) pSel.value = userProvince;
+    if(pSel){
+      // Clear existing options except first
+      while(pSel.options.length > 1) pSel.remove(1);
+      
+      const userProvinces = (currentUser?.province||'').split(',').map(p=>p.trim()).filter(p=>p&&p.toUpperCase()!=='ALL');
+      const isLocked = userProvinces.length > 0;
+      
+      if(isLocked){
+        // User has specific provinces — only show those, disable filter
+        userProvinces.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p;
+          const short = p.replace('TRUE-TH-BBT-','').replace('-NOP','');
+          o.textContent = short;
+          pSel.appendChild(o);
+        });
+        // Auto-select first province, lock to it
+        if(userProvinces.length === 1){
+          pSel.value = userProvinces[0];
+          pSel.disabled = true;
+          pSel.title = 'ถูกจำกัดตามสิทธิ์';
+        }
+      } else {
+        // Manager/Regional — show all groups grouped by NOR1/NOR2
+        allGroups.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p;
+          const short = p.replace('TRUE-TH-BBT-','').replace('-NOP','');
+          o.textContent = short;
+          pSel.appendChild(o);
+        });
+      }
+    }
     renderTicketTable(getFilteredTickets());
     renderTicketsKPI(getFilteredTickets());
     renderPivotTable(allTickets);
@@ -898,7 +936,7 @@ function getFilteredTickets(){
     const tStep = String(t.STEP||'0');
     const matchStep = !step || tStep === step || (step==='0' && (!t.STEP||t.STEP===''));
     const matchResult = !result || t.FINAL_RESULT === result;
-    const matchProv = !province || (t.TrackB_Region||'') === province;
+    const matchProv = !province || (t.TRUEOWNERGROUP||'') === province;
     return matchQ && matchStep && matchResult && matchProv;
   });
 }
