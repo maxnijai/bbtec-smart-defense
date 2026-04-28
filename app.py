@@ -550,9 +550,9 @@ def review_defend(ticketid):
             fields[COL_LOCKED]       = "TRUE"
             msg = "Defend ครบ 2 ครั้ง — ยืนยัน ปรับ ข้อมูล Lock แล้ว"
         else:
-            # ยังสามารถ Defend ได้อีก (ครั้งที่ 1 ยังปรับ)
-            fields[COL_STEP] = "3"
-            msg = f"FSO ยังตัดสิน ปรับ — Engineer สามารถขอ Defend ครั้งที่ {defend_count + 1} ได้"
+            # FSO reject defend ครั้งนี้ → set step กลับเป็น 2 เพื่อให้ Engineer เห็นปุ่ม Defend ครั้งถัดไป
+            fields[COL_STEP] = "2"
+            msg = f"FSO ยังตัดสิน ปรับ — Engineer สามารถขอ Defend ครั้งที่ {defend_count + 1} ได้ (เหลือ {2 - defend_count} ครั้ง)"
 
         update_ticket_fields(sheet, headers, row_idx, fields)
         return jsonify({"success": True, "message": msg, "decision": decision, "defend_count": defend_count})
