@@ -461,14 +461,18 @@ def request_defend(ticketid):
         if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
             return jsonify({"error": "Ticket นี้ถูก Lock แล้ว"}), 403
 
-        # Try multiple column name variants for FSO decision
+        current_step = str(ticket.get(COL_STEP, "")).strip()
         fso_decision = (
             str(ticket.get(COL_FSO_DECISION, "") or "").strip() or
-            str(ticket.get("FSO พิจารณา", "") or "").strip() or
-            str(ticket.get("FSO_DECISION", "") or "").strip()
+            str(ticket.get("FSO พิจารณา", "") or "").strip()
         )
-        if fso_decision != "ปรับ":
-            return jsonify({"error": f"ขอ Defend ได้เฉพาะ Ticket ที่ FSO ตัดสิน ปรับ เท่านั้น (current: '{fso_decision}')"}), 403
+        # step=2 = FSO พิจารณาแล้ว (ปรับ) — allow defend
+        # step=3 = กำลัง defend อยู่ — allow re-defend
+        if current_step not in ("2", "3"):
+            return jsonify({"error": f"ยังไม่ถึง Step Defend (step={current_step})"}), 403
+        # ถ้า FSO ตัดสิน ไม่ปรับ ชัดเจน — ห้าม defend
+        if fso_decision == "ไม่ปรับ":
+            return jsonify({"error": "FSO ตัดสิน ไม่ปรับ แล้ว ไม่จำเป็นต้อง Defend"}), 403
 
         try:
             defend_count = int(ticket.get(COL_DEFEND_COUNT, 0) or 0)
