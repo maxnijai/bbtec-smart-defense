@@ -1034,16 +1034,25 @@ function openTicket(ticket){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 2 — ผลการพิจารณาจาก FSO</div>
-        <div style="padding:14px;border-radius:10px;margin-bottom:14px;text-align:center;
+        <div style="padding:14px;border-radius:10px;margin-bottom:12px;text-align:center;
           background:${isNoPenalty?'#1a3d2a':'#3d1a1a'};
           border:2px solid ${isNoPenalty?'#10b981':'#ef4444'}">
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px">ผลการพิจารณา FSO</div>
           <div style="font-size:22px;font-weight:700;color:${isNoPenalty?'#6ee7b7':'#fca5a5'}">
             ${isNoPenalty ? '🟢 ไม่ปรับ' : '🔴 ปรับ'}
           </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">
+            FSO: <b style="color:var(--text)">${ticket['FSO approve (ลงชื่อ FSO)']||'—'}</b>
+            &nbsp;|&nbsp; วันที่: <b style="color:var(--text)">${ticket['วันที่ FSO อนุมัติ']||'—'}</b>
+          </div>
           ${!isNoPenalty ? `<div style="font-size:11px;color:#fca5a5;margin-top:4px">เหลือสิทธิ์ Defend อีก ${2-defendCount} ครั้ง</div>` : ''}
           ${defendHistoryHTML}
         </div>
+        ${(ticket['Remark FSO']||ticket['remark_fso']||'') ? `
+        <div style="background:#1e2a3a;border:1px solid #3b5a7a;border-radius:8px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;color:#93c5fd;font-weight:600;margin-bottom:6px">💬 Remark จาก FSO</div>
+          <div style="font-size:13px;color:var(--text);line-height:1.6">${ticket['Remark FSO']||ticket['remark_fso']||''}</div>
+        </div>` : ''}
         ${isNoPenalty ? 
           `<div style="text-align:center;color:#6ee7b7;padding:12px;background:#1a3d2a;border-radius:8px">
             ✅ FSO ตัดสิน ไม่ปรับ — รอ Manager Approve
@@ -1119,14 +1128,16 @@ function openTicket(ticket){
 
   // Step 3 Defend review (FSO)
   else if(isFSORole(role) && !locked && step==='3'){
-    // Try multiple column name variants for defend reason
-    const defendReason = (
-      ticket['BBTEC Defend\nไม่สมควรปรับ'] ||
-      ticket['BBTEC Defend ไม่สมควรปรับ'] ||
-      ticket['BBTEC Defend\\nไม่สมควรปรับ'] ||
-      Object.entries(ticket).find(([k])=>k.includes('Defend')&&k.includes('สมควร'))?.[1] ||
-      '—'
-    );
+    // Use normalized _defend_reason from backend, fallback to dynamic search
+    let defendReason = ticket['_defend_reason'] || '';
+    if(!defendReason){
+      for(const [k,v] of Object.entries(ticket)){
+        if(k.includes('Defend') && (k.includes('สมควร') || k.includes('BBTEC')) && v){
+          defendReason = v; break;
+        }
+      }
+    }
+    if(!defendReason) defendReason = '—';
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 3 — FSO พิจารณา Defend ครั้งที่ ${defendCount}/2</div>
@@ -1195,6 +1206,11 @@ function openTicket(ticket){
         <div class="detail-label">Overdue Detail + Link รูป (AG)</div>
         <div class="detail-val" style="font-size:12px">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
       </div>
+      ${(ticket['Remark FSO']||'').trim() ? `
+      <div class="detail-item" style="grid-column:span 2;background:#1e2a3a;border:1px solid #3b5a7a">
+        <div class="detail-label" style="color:#93c5fd">💬 Remark จาก FSO (Step 2)</div>
+        <div class="detail-val" style="color:var(--text);font-size:13px">${ticket['Remark FSO']||''}</div>
+      </div>` : ''}
     </div>
     ${formHTML}
   `;
