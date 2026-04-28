@@ -649,7 +649,8 @@ def dashboard_summary():
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
         records = rows_to_dicts(sheet)
-        region = session.get("region")
+        # Dashboard shows ALL data regardless of user province — no filter here
+        # (province filter only applies to Ticket page)
 
         total = reviewed = fso_penalty = fso_no_penalty = 0
         defend_req = defend_success = defend_round2 = 0
@@ -657,24 +658,9 @@ def dashboard_summary():
         approved = pending_approve = 0
         total_penalty_baht = final_penalty_baht = 0
 
-        # Same province filter logic as get_tickets
-        allowed_provinces = []
-        if province and province.upper() not in ("ALL", ""):
-            allowed_provinces = [p.strip() for p in province.split(",") if p.strip() and p.strip().upper() != "ALL"]
-
         for r in records:
             if not r.get(COL_TICKETID):
                 continue
-            if allowed_provinces:
-                ticket_owner = str(r.get("TRUEOWNERGROUP", "")).strip()
-                if ticket_owner not in allowed_provinces:
-                    continue
-            elif region and region.upper() not in ("ALL", ""):
-                row_region = str(r.get(COL_REGION, "")).strip()
-                region_upper = region.upper()
-                if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
-                    if not any(x in row_region.upper() for x in ["NORTH","NOR1","NOR2","NOR"]):
-                        continue
             total += 1
             try:
                 total_penalty_baht += float(str(r.get(COL_PENALTYBAHT, "0") or 0).replace(",", ""))
