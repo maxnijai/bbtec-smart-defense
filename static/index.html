@@ -836,33 +836,71 @@ function openTicket(ticket){
 
   let formHTML = '';
 
-  // Step 1 form (Engineer)
+  // Step 1 form (Engineer) — กรอกข้อมูล
   if(isEngineerRole(role) && !locked && (step===''||step==='0'||step==='1')){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 1 — Engineer กรอกข้อมูล</div>
-        <div class="form-row" style="margin-bottom:10px">
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Group Problem</div>
-            <input class="form-input" id="f-group" placeholder="เช่น สายอากาศ, ONU" value="${ticket['Group problem']||''}"/></div>
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Sub Problem</div>
-            <input class="form-input" id="f-sub" placeholder="Sub Problem" value="${ticket['Sub Problem']||''}"/></div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Group Problem</div>
+            <input class="form-input" id="f-group" placeholder="เช่น สายอากาศ, ONU" value="${ticket['Group problem']||''}"/>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Sub Problem</div>
+            <input class="form-input" id="f-sub" placeholder="Sub Problem" value="${ticket['Sub Problem']||''}"/>
+          </div>
         </div>
-        <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident</div>
-          <input class="form-input" id="f-accident" placeholder="Accident (ถ้ามี)" value="${ticket.Accident||''}"/></div>
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
-          <textarea class="form-textarea" id="f-overdue">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident (ถ้ามี)</div>
+          <input class="form-input" id="f-accident" placeholder="Accident" value="${ticket.Accident||''}"/>
         </div>
-        <div class="form-row" style="margin-bottom:10px">
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK รูป (ใส่ใน AG ต่อท้าย)</div>
-            <input class="form-input" id="f-photo" placeholder="https://photos.app.goo.gl/..." value=""/></div>
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
-            <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||''}"/></div>
+        <div style="margin-bottom:12px;background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:#6ee7b7;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
+          <textarea class="form-textarea" id="f-overdue" style="margin-bottom:8px">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
+          <div style="font-size:11px;color:#6ee7b7;margin-bottom:4px">📷 แนบ LINK รูป (เพิ่มต่อท้าย AG)</div>
+          <input class="form-input" id="f-photo" placeholder="https://photos.app.goo.gl/..." value=""/>
+        </div>
+        <div style="margin-bottom:12px;background:#1a2640;border:1px solid #253550;border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:#93c5fd;margin-bottom:6px;font-weight:600">🔗 แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
+          <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||''}"/>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
           <button class="btn-submit" onclick="submitStep1('${ticket.TICKETID}')">ยืนยัน Step 1 🔒</button>
         </div>
+      </div>`;
+  }
+
+  // Step 2 — Engineer เห็นผลการพิจารณา FSO + ตัดสินใจ Defend หรือ ยอมรับ
+  else if(isEngineerRole(role) && !locked && step==='2'){
+    const isPenalty = fsoDecision === 'ปรับ';
+    const canDefend = isPenalty && defendCount < 2;
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 2 — ผลการพิจารณาจาก FSO</div>
+        <div style="padding:14px;border-radius:10px;margin-bottom:14px;text-align:center;
+          background:${isPenalty?'#3d1a1a':'#1a3d2a'};
+          border:2px solid ${isPenalty?'#ef4444':'#10b981'}">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">ผลการพิจารณา FSO</div>
+          <div style="font-size:22px;font-weight:700;color:${isPenalty?'#fca5a5':'#6ee7b7'}">
+            ${isPenalty ? '🔴 ปรับ' : fsoDecision ? '🟢 ไม่ปรับ' : '⏳ รอ FSO พิจารณา'}
+          </div>
+          ${isPenalty ? `<div style="font-size:11px;color:#fca5a5;margin-top:4px">Defend ได้อีก ${2-defendCount} ครั้ง</div>` : ''}
+        </div>
+        ${canDefend ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <button class="btn-submit" style="background:#1e3a5f;border:2px solid #3b82f6;padding:14px;border-radius:10px;font-size:13px"
+            onclick="showDefendForm('${ticket.TICKETID}',${defendCount})">
+            ⚔️ ขอ Defend (ครั้งที่ ${defendCount+1}/2)
+          </button>
+          <button class="btn-submit" style="background:#3d1a1a;border:2px solid #ef4444;padding:14px;border-radius:10px;font-size:13px"
+            onclick="acceptPenalty('${ticket.TICKETID}')">
+            ✋ ยอมรับค่าปรับ
+          </button>
+        </div>` : 
+        fsoDecision === 'ไม่ปรับ' ? `<div style="text-align:center;color:#6ee7b7;padding:12px">✅ ไม่มีค่าปรับ — รอ Manager Approve</div>` :
+        `<div style="text-align:center;color:var(--muted);padding:12px">⏳ รอ FSO พิจารณาก่อนครับ</div>`}
       </div>`;
   }
 
@@ -1023,6 +1061,38 @@ function selectDecision(val){
   $('dec-no-penalty').className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
   const btn = $('btn-fso-submit');
   if(btn) btn.disabled = false;
+}
+
+// ── Defend inline form ──
+function showDefendForm(tid, currentCount){
+  const body = $('modal-body');
+  // Find the form section and replace with defend form
+  const formSection = body.querySelector('.form-section');
+  if(formSection){
+    formSection.innerHTML = `
+      <div class="form-section-title">⚔️ STEP 3 — ขอ Defend ครั้งที่ ${currentCount+1}/2</div>
+      <div class="defend-counter" style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted)">ใช้ไปแล้ว</div>
+        <div class="defend-dots">
+          ${[0,1].map(i=>`<div class="defend-dot ${i<currentCount?'used':''}"></div>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--amber)">${currentCount}/2 ครั้ง — เหลือ ${2-currentCount} ครั้ง</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">เหตุผลที่ไม่สมควรถูกปรับ</div>
+        <textarea class="form-textarea" id="f-defend-reason" placeholder="อธิบายเหตุผลโดยละเอียด..." style="min-height:100px"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn-submit" onclick="submitDefendRequest('${tid}')">ส่งคำขอ Defend ครั้งที่ ${currentCount+1} ⚔️</button>
+      </div>`;
+  }
+}
+
+function acceptPenalty(tid){
+  if(!confirm('ยืนยันการยอมรับค่าปรับ? ข้อมูลจะถูก Lock')) return;
+  // Move to step 4 final=ปรับ by calling a special endpoint
+  apiPost(`/api/ticket/${tid}/accept`, {});
 }
 
 // ── Submit handlers ──
