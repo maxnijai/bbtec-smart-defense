@@ -312,14 +312,13 @@ def get_tickets():
         for r in records:
             if not r.get(COL_TICKETID):
                 continue
-            if role in STEP5_ROLES or role in [ROLE_REGIONAL]:
-                # Manager and Regional see all tickets in their region
-                if region and str(r.get(COL_REGION, "")).strip() != region:
-                    continue
-            else:
-                # Engineer / FSO see only their province
-                if province and str(r.get("TrackB_Region", "")).strip() != province:
-                    pass  # adjust logic to your region column
+            # Flexible region filter — NOR1 matches "02) North", "NOR1", "North" etc.
+            if region:
+                row_region = str(r.get(COL_REGION, "")).strip()
+                region_upper = region.upper()
+                if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
+                    if not any(x in row_region.upper() for x in ["NORTH","NOR1","NOR2","NOR"]):
+                        continue
             filtered.append(r)
 
         return jsonify({"tickets": filtered, "total": len(filtered)})
@@ -633,7 +632,7 @@ def dashboard_summary():
         region = session.get("region")
 
         total = reviewed = fso_penalty = fso_no_penalty = 0
-        defend_req = defend_success = 0
+        defend_req = defend_success = defend_round2 = 0
         final_penalty = final_no_penalty = 0
         approved = pending_approve = 0
         total_penalty_baht = final_penalty_baht = 0
@@ -641,8 +640,15 @@ def dashboard_summary():
         for r in records:
             if not r.get(COL_TICKETID):
                 continue
-            if region and str(r.get(COL_REGION, "")).strip() != region:
-                continue
+            # Region filter: flexible match (NOR1 matches "02) North", "NOR1", etc.)
+            if region:
+                row_region = str(r.get(COL_REGION, "")).strip()
+                region_upper = region.upper()
+                # Skip only if region clearly doesn't match
+                if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
+                    # Also allow NOR1/NOR2 to see all "North" tickets
+                    if not any(x in row_region.upper() for x in ["NORTH","NOR1","NOR2","NOR"]):
+                        continue
             total += 1
             try:
                 total_penalty_baht += float(str(r.get(COL_PENALTYBAHT, "0") or 0).replace(",", ""))
@@ -664,6 +670,8 @@ def dashboard_summary():
                 dc = 0
             if dc > 0:
                 defend_req += 1
+            if dc >= 2:
+                defend_round2 += 1
 
             final = str(r.get(COL_FINAL_RESULT, "")).strip()
             if final == "ปรับ":
@@ -697,6 +705,7 @@ def dashboard_summary():
             "total_penalty_baht": total_penalty_baht,
             "final_penalty_baht": final_penalty_baht,
             "saved_baht":         total_penalty_baht - final_penalty_baht,
+            "defend_round2":      defend_round2,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
