@@ -307,13 +307,24 @@ def get_tickets():
         region   = session.get("region")
         province = session.get("province")
 
-        # Filter by region/province for non-manager roles
+        # Province filter: comma-separated list in session["province"]
+        # e.g. "TRUE-TH-BBT-NOR1-LPG-NOP,TRUE-TH-BBT-NOR1-NAN-NOP"
+        # Matches against TRUEOWNERGROUP column in ticket
+        allowed_provinces = []
+        if province and province.upper() not in ("ALL", ""):
+            allowed_provinces = [p.strip() for p in province.split(",") if p.strip() and p.strip().upper() != "ALL"]
+
         filtered = []
         for r in records:
             if not r.get(COL_TICKETID):
                 continue
-            # Flexible region filter — NOR1 matches "02) North", "NOR1", "North" etc.
-            if region:
+            # Province filter (Engineer/FSO with specific provinces assigned)
+            if allowed_provinces:
+                ticket_owner = str(r.get("TRUEOWNERGROUP", "")).strip()
+                if ticket_owner not in allowed_provinces:
+                    continue
+            elif region and region.upper() not in ("ALL", ""):
+                # Region filter for managers/regional with no specific province
                 row_region = str(r.get(COL_REGION, "")).strip()
                 region_upper = region.upper()
                 if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
@@ -646,16 +657,22 @@ def dashboard_summary():
         approved = pending_approve = 0
         total_penalty_baht = final_penalty_baht = 0
 
+        # Same province filter logic as get_tickets
+        allowed_provinces = []
+        if province and province.upper() not in ("ALL", ""):
+            allowed_provinces = [p.strip() for p in province.split(",") if p.strip() and p.strip().upper() != "ALL"]
+
         for r in records:
             if not r.get(COL_TICKETID):
                 continue
-            # Region filter: flexible match (NOR1 matches "02) North", "NOR1", etc.)
-            if region:
+            if allowed_provinces:
+                ticket_owner = str(r.get("TRUEOWNERGROUP", "")).strip()
+                if ticket_owner not in allowed_provinces:
+                    continue
+            elif region and region.upper() not in ("ALL", ""):
                 row_region = str(r.get(COL_REGION, "")).strip()
                 region_upper = region.upper()
-                # Skip only if region clearly doesn't match
                 if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
-                    # Also allow NOR1/NOR2 to see all "North" tickets
                     if not any(x in row_region.upper() for x in ["NORTH","NOR1","NOR2","NOR"]):
                         continue
             total += 1
@@ -713,7 +730,7 @@ def dashboard_summary():
             "pending_approve":    pending_approve,
             "total_penalty_baht": total_penalty_baht,
             "final_penalty_baht": final_penalty_baht,
-            "saved_baht":         total_penalty_baht - final_penalty_baht,
+            "saved_baht":         max(0, total_penalty_baht - final_penalty_baht),
             "defend_round2":      defend_round2,
         })
     except Exception as e:
