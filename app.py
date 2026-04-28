@@ -601,7 +601,7 @@ def accept_penalty(ticketid):
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/approve", methods=["POST"])
 @login_required
-@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "Manager NOR1", "Manager NOR2")
+@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "BBTEC_MANAGER", "Manager NOR1", "Manager NOR2", "BBTEC_MANAGER_NOR1", "BBTEC_MANAGER_NOR2", "BBTEC MANAGER NOR1", "BBTEC MANAGER NOR2")
 def manager_approve(ticketid):
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
