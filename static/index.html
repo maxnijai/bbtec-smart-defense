@@ -881,7 +881,7 @@ function renderMyTickets(){
   } else if(['FSO','FSO Manager'].includes(role)){
     filtered = allTickets.filter(t => t.STEP==='2' || t.STEP==='3');
     title = 'Ticket รอ FSO พิจารณา';
-  } else if(role==='Manager'){
+  } else if(isManagerRole(role)){
     filtered = allTickets.filter(t => t.STEP==='4');
     title = 'Ticket รอ Manager Approve';
   }
@@ -948,7 +948,9 @@ function isFSORole(role){
 }
 function isManagerRole(role){
   const r = (role||'').toUpperCase();
-  return ['MANAGER','BBTEC MANAGER','MANAGER NOR1','MANAGER NOR2'].includes(r);
+  return ['MANAGER','BBTEC MANAGER','BBTEC_MANAGER','MANAGER NOR1','MANAGER NOR2',
+          'BBTEC MANAGER NOR1','BBTEC MANAGER NOR2','BBTEC_MANAGER_NOR1','BBTEC_MANAGER_NOR2'].includes(r)
+    || r.includes('MANAGER');
 }
 
 // ── Modal ──
@@ -1160,7 +1162,7 @@ function openTicket(ticket){
   }
 
   // Step 5 Manager Approve
-  else if(isManagerRole(role) && !locked && step==='4'){
+  else if(isManagerRole(role) && (step==='4' || (!locked && step==='4'))){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 5 — Manager Approve</div>
