@@ -556,6 +556,35 @@ def review_defend(ticketid):
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
+# Accept Penalty (Engineer ยอมรับค่าปรับ — skip defend)
+# ─────────────────────────────────────────────
+@app.route("/api/ticket/<ticketid>/accept", methods=["POST"])
+@login_required
+@require_role(ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "Engineer Zone")
+def accept_penalty(ticketid):
+    try:
+        sheet = get_sheet("NOR_Penalty_Ticket")
+        headers = ensure_new_columns(sheet)
+        row_idx = find_row_index(sheet, ticketid)
+        if not row_idx:
+            return jsonify({"error": "ไม่พบ Ticket"}), 404
+        records = rows_to_dicts(sheet)
+        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
+        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
+            return jsonify({"error": "Ticket ถูก Lock แล้ว"}), 403
+        fields = {
+            COL_STEP:         "4",
+            COL_FINAL_RESULT: "ปรับ",
+            COL_LOCKED:       "TRUE",
+            COL_LAST_UPDATED: now_str(),
+            COL_UPDATED_BY:   session.get("user"),
+        }
+        update_ticket_fields(sheet, headers, row_idx, fields)
+        return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว — ส่ง Step 4 รอ Manager Approve"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────
 # Step 5 — Manager Approve
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/approve", methods=["POST"])
