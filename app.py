@@ -86,7 +86,7 @@ COL_FSO_REMARK          = "Remark FSO"
 
 # Step 3 — Reviewer / Defend
 COL_REVIEWER            = "Reviewer"
-COL_DEFEND              = "BBTEC Defend ไม่สมควรปรับ"
+COL_DEFEND              = "BBTEC Defend\nไม่สมควรปรับ"  # actual Sheet column has newline
 COL_CHECK               = "Check"
 
 # ── New columns added by this system ──
@@ -334,6 +334,15 @@ def get_ticket(ticketid):
         ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
         if not ticket:
             return jsonify({"error": "ไม่พบ Ticket"}), 404
+        # Add normalized defend_reason — column name has actual newline in Sheet
+        defend_reason = str(ticket.get(COL_DEFEND, "") or "")
+        if not defend_reason:
+            # Fallback: scan all keys
+            for k, v in ticket.items():
+                if "Defend" in str(k) and ("สมควร" in str(k) or "BBTEC" in str(k)) and v:
+                    defend_reason = str(v)
+                    break
+        ticket["_defend_reason"] = defend_reason
         return jsonify(ticket)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
