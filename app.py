@@ -670,11 +670,24 @@ def dashboard_summary():
             step = str(r.get(COL_STEP, "")).strip()
             if step in ("1", "2", "3", "4", "5"):
                 reviewed += 1
-            fso_dec = str(r.get(COL_FSO_DECISION, "")).strip()
+
+            # FSO decision: try multiple column variants (column name may vary)
+            fso_dec = (
+                str(r.get(COL_FSO_DECISION, "") or "").strip() or
+                str(r.get("FSO พิจารณา", "") or "").strip()
+            )
+            # Also infer from STEP: step>=2 means FSO reviewed = ปรับ (unless final=ไม่ปรับ from FSO direct)
+            final = str(r.get(COL_FINAL_RESULT, "")).strip()
             if fso_dec == "ปรับ":
                 fso_penalty += 1
             elif fso_dec == "ไม่ปรับ":
                 fso_no_penalty += 1
+            elif step in ("2", "3", "4", "5"):
+                # FSO column empty but step advanced — infer from final result or step
+                if final == "ไม่ปรับ":
+                    fso_no_penalty += 1
+                else:
+                    fso_penalty += 1  # Step 2+ without ไม่ปรับ = ปรับ
 
             try:
                 dc = int(r.get(COL_DEFEND_COUNT, 0) or 0)
@@ -685,7 +698,6 @@ def dashboard_summary():
             if dc >= 2:
                 defend_round2 += 1
 
-            final = str(r.get(COL_FINAL_RESULT, "")).strip()
             if final == "ปรับ":
                 final_penalty += 1
                 try:
