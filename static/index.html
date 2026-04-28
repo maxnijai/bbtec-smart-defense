@@ -873,7 +873,7 @@ function openTicket(ticket){
   }
 
   // Step 2 — Engineer เห็นผลการพิจารณา FSO + ตัดสินใจ Defend หรือ ยอมรับ
-  else if(isEngineerRole(role) && !locked && step==='2'){
+  else if(isEngineerRole(role) && !locked && (step==='2' || step==='3')){
     // Step=2 หมายความว่า FSO พิจารณาแล้ว (ปรับ)
     // ถ้า fsoDecision ว่าง แสดงว่า column name ไม่ตรง แต่ step=2 = FSO ปรับแล้ว
     const isNoPenalty = fsoDecision === 'ไม่ปรับ';
