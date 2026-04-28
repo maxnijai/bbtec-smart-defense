@@ -169,6 +169,26 @@
     width:200px;outline:none;
   }
   .search-input:focus{border-color:var(--accent)}
+  .sortable{cursor:pointer;user-select:none}
+  .sortable:hover{background:#1e2e44;color:var(--text)}
+  .sort-icon{font-size:10px;opacity:.6}
+  th.sort-asc .sort-icon::after{content:'↑';opacity:1}
+  th.sort-desc .sort-icon::after{content:'↓';opacity:1}
+  /* Pivot table styles */
+  .pivot-table{width:100%;border-collapse:collapse;font-size:11px}
+  .pivot-table th{padding:7px 10px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+  .pivot-table th:first-child,.pivot-table th:nth-child(2){text-align:left}
+  .pivot-table td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-size:11px}
+  .pivot-table td:first-child{font-size:10px;color:var(--muted);text-align:left;padding-left:20px}
+  .pivot-table td:nth-child(2){text-align:left;font-weight:500;color:var(--text)}
+  .pivot-table tr.region-row td{background:var(--bg3);font-weight:700;color:var(--accent2);font-size:11px}
+  .pivot-table tr.region-row td:first-child{padding-left:8px}
+  .pivot-table tr.total-row td{background:#162035;font-weight:700;color:var(--text);border-top:2px solid var(--accent)}
+  .pivot-table .num-green{color:#10b981;font-weight:600}
+  .pivot-table .num-red{color:#ef4444;font-weight:600}
+  .pivot-table .num-amber{color:#f59e0b;font-weight:600}
+  .pivot-table .num-blue{color:#93c5fd;font-weight:600}
+  .pivot-table .pct{font-size:10px;color:var(--muted)}
   table{width:100%;border-collapse:collapse}
   th{
     padding:10px 14px;text-align:left;font-size:11px;font-weight:500;
@@ -396,15 +416,18 @@
       <div id="dashboard-content" style="display:none">
         <!-- KPI Summary Banner -->
         <div id="kpi-grid"></div>
-        <!-- Charts row -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px">
-          <div class="chart-card" style="grid-column:span 2">
-            <div class="chart-title">สัดส่วน Penalty / ไม่ Penalty รายขั้นตอน</div>
-            <canvas id="chart-fso" height="140"></canvas>
+        <!-- Summary pivot table + chart -->
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:14px;margin-top:14px">
+          <div class="chart-card" style="padding:0;overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+              <span style="font-size:12px;font-weight:600">📊 Overall Summary — Workflow by Province</span>
+              <span style="font-size:11px;color:var(--muted);margin-left:auto">NOR1 / NOR2</span>
+            </div>
+            <div id="pivot-table-wrap" style="overflow-x:auto;max-height:340px;overflow-y:auto"></div>
           </div>
           <div class="chart-card">
             <div class="chart-title">ยอดค่าปรับ (บาท)</div>
-            <canvas id="chart-baht" height="140"></canvas>
+            <canvas id="chart-baht" height="200"></canvas>
           </div>
         </div>
       </div>
@@ -412,21 +435,27 @@
 
     <!-- Page: Tickets -->
     <div class="page" id="page-tickets">
+      <!-- Mini KPI for tickets page (province-filtered) -->
+      <div id="tickets-kpi" style="margin-bottom:14px"></div>
       <div class="table-wrap">
-        <div class="table-header">
+        <div class="table-header" style="flex-wrap:wrap;gap:8px">
           <div class="table-title">รายการ Ticket ทั้งหมด</div>
-          <div class="filter-row">
-            <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID..." oninput="filterTickets()"/>
+          <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-left:auto">
+            <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID / Subject..." oninput="filterTickets()"/>
+            <select class="filter-select" id="filter-province" onchange="filterTickets()">
+              <option value="">ทุก Province</option>
+            </select>
             <select class="filter-select" id="filter-step" onchange="filterTickets()">
               <option value="">ทุก Step</option>
+              <option value="0">รอ Step 1</option>
               <option value="1">Step 1</option>
               <option value="2">Step 2</option>
-              <option value="3">Step 3 (Defend)</option>
-              <option value="4">Step 4 (Final)</option>
-              <option value="5">Step 5 (Manager)</option>
+              <option value="3">⚔️ Defend</option>
+              <option value="4">Final</option>
+              <option value="5">✓ Approved</option>
             </select>
             <select class="filter-select" id="filter-result" onchange="filterTickets()">
-              <option value="">ทุกผลลัพธ์</option>
+              <option value="">ทุก Final</option>
               <option value="ปรับ">ปรับ</option>
               <option value="ไม่ปรับ">ไม่ปรับ</option>
             </select>
@@ -436,13 +465,13 @@
         <table id="ticket-table" style="display:none">
           <thead>
             <tr>
-              <th>TICKET ID</th>
-              <th>Subject</th>
-              <th>Province</th>
-              <th>ค่าปรับ (บาท)</th>
-              <th>FSO ตัดสิน</th>
-              <th>Step</th>
-              <th>Final</th>
+              <th class="sortable" data-col="TICKETID" onclick="sortTable('TICKETID')">TICKET ID <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="SUBJECT" onclick="sortTable('SUBJECT')">Subject <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="TrackB_Region" onclick="sortTable('TrackB_Region')">Province <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="PENALTYBAHT_TRACKB" onclick="sortTable('PENALTYBAHT_TRACKB')">ค่าปรับ (บาท) <span class="sort-icon">↓</span></th>
+              <th class="sortable" data-col="FSO" onclick="sortTable('FSO')">FSO ตัดสิน <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="STEP" onclick="sortTable('STEP')">Step <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="FINAL_RESULT" onclick="sortTable('FINAL_RESULT')">Final <span class="sort-icon">⇅</span></th>
               <th>จัดการ</th>
             </tr>
           </thead>
@@ -594,6 +623,7 @@ async function loadDashboard(){
     renderKPI(d);
     renderFsoChart(d);
     renderBahtChart(d);
+    if(allTickets.length) renderPivotTable(allTickets);
   } catch(e){
     $('dashboard-loading').textContent = 'โหลดข้อมูลไม่สำเร็จ';
   }
@@ -806,6 +836,9 @@ function renderBahtChart(d){
 }
 
 // ── Tickets ──
+let sortCol = 'PENALTYBAHT_TRACKB';
+let sortDir = 'desc';
+
 async function loadTickets(){
   try {
     const res = await fetch(`${API}/api/tickets`,{credentials:'include'});
@@ -817,8 +850,52 @@ async function loadTickets(){
     });
     $('tickets-loading').style.display='none';
     $('ticket-table').style.display='table';
-    renderTicketTable(allTickets);
+    // Populate province filter
+    const provinces = [...new Set(allTickets.map(t=>t.TrackB_Region||'').filter(Boolean))].sort();
+    const pSel = $('filter-province');
+    if(pSel) provinces.forEach(p => {
+      const o = document.createElement('option'); o.value=p; o.textContent=p; pSel.appendChild(o);
+    });
+    // Auto-select user's province if set
+    const userProvince = currentUser?.province||'';
+    if(userProvince && pSel) pSel.value = userProvince;
+    renderTicketTable(getFilteredTickets());
+    renderTicketsKPI(getFilteredTickets());
+    renderPivotTable(allTickets);
   } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ' }
+}
+
+function getFilteredTickets(){
+  const q = ($('search-tickets')?.value||'').toLowerCase();
+  const step = $('filter-step')?.value||'';
+  const result = $('filter-result')?.value||'';
+  const province = $('filter-province')?.value||'';
+  return allTickets.filter(t => {
+    const matchQ = !q || (t.TICKETID||'').toLowerCase().includes(q) || (t.SUBJECT||'').toLowerCase().includes(q);
+    const tStep = String(t.STEP||'0');
+    const matchStep = !step || tStep === step || (step==='0' && (!t.STEP||t.STEP===''));
+    const matchResult = !result || t.FINAL_RESULT === result;
+    const matchProv = !province || (t.TrackB_Region||'') === province;
+    return matchQ && matchStep && matchResult && matchProv;
+  });
+}
+
+function sortTable(col){
+  if(sortCol === col) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortCol=col; sortDir = col==='PENALTYBAHT_TRACKB'?'desc':'asc'; }
+  // Update header icons
+  document.querySelectorAll('.sortable').forEach(th=>{
+    th.classList.remove('sort-asc','sort-desc');
+    const icon = th.querySelector('.sort-icon');
+    if(icon) icon.textContent='⇅';
+  });
+  const activeH = document.querySelector(`[data-col="${col}"]`);
+  if(activeH){
+    activeH.classList.add(sortDir==='asc'?'sort-asc':'sort-desc');
+    const icon = activeH.querySelector('.sort-icon');
+    if(icon) icon.textContent = sortDir==='asc'?'↑':'↓';
+  }
+  renderTicketTable(getFilteredTickets());
 }
 
 function stepBadge(step, defendCount){
@@ -842,12 +919,27 @@ function renderTicketTable(tickets){
   if(!tickets.length){
     tbody.innerHTML='<tr class="empty-row"><td colspan="8">ไม่พบข้อมูล</td></tr>'; return;
   }
-  tbody.innerHTML = tickets.slice(0,200).map(t => `
+  // Sort
+  const sorted = [...tickets].sort((a,b)=>{
+    let av = a[sortCol]||'', bv = b[sortCol]||'';
+    if(sortCol==='PENALTYBAHT_TRACKB'){
+      av = parseFloat(String(av).replace(/,/g,''))||0;
+      bv = parseFloat(String(bv).replace(/,/g,''))||0;
+      return sortDir==='asc' ? av-bv : bv-av;
+    }
+    if(sortCol==='STEP'){
+      av = parseInt(av)||0; bv = parseInt(bv)||0;
+      return sortDir==='asc' ? av-bv : bv-av;
+    }
+    av = String(av).toLowerCase(); bv = String(bv).toLowerCase();
+    return sortDir==='asc' ? av.localeCompare(bv,'th') : bv.localeCompare(av,'th');
+  });
+  tbody.innerHTML = sorted.slice(0,300).map(t => `
     <tr>
       <td><span class="tid">${t.TICKETID||'—'}</span></td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.SUBJECT||'—'}</td>
-      <td>${t.TrackB_Region||'—'}</td>
-      <td>${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.SUBJECT||'').replace(/"/g,'')}">${t.SUBJECT||'—'}</td>
+      <td style="white-space:nowrap">${t.TrackB_Region||'—'}</td>
+      <td style="text-align:right;font-weight:600;color:${parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))>0?'var(--red)':'var(--muted)'}">${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
       <td>${resultBadge(t['FSO พิจารณา (ปรับ/ไม่ปรับ)'])}</td>
       <td>${stepBadge(t.STEP, t.DEFEND_COUNT)}</td>
       <td>${resultBadge(t.FINAL_RESULT)}</td>
@@ -857,16 +949,161 @@ function renderTicketTable(tickets){
 }
 
 function filterTickets(){
-  const q = $('search-tickets').value.toLowerCase();
-  const step = $('filter-step').value;
-  const result = $('filter-result').value;
-  const filtered = allTickets.filter(t => {
-    const matchQ = !q || (t.TICKETID||'').toLowerCase().includes(q) || (t.SUBJECT||'').toLowerCase().includes(q);
-    const matchStep = !step || String(t.STEP) === step;
-    const matchResult = !result || t.FINAL_RESULT === result || t['FSO พิจารณา (ปรับ/ไม่ปรับ)'] === result;
-    return matchQ && matchStep && matchResult;
-  });
+  const filtered = getFilteredTickets();
   renderTicketTable(filtered);
+  renderTicketsKPI(filtered);
+}
+
+// ── Tickets Page Mini KPI ──
+function renderTicketsKPI(tickets){
+  const el = $('tickets-kpi');
+  if(!el) return;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M บาท':fmt(v)+' บาท'; };
+  const total = tickets.length;
+  const reviewed = tickets.filter(t=>t.STEP&&t.STEP!=='0').length;
+  const penalty = tickets.filter(t=>t.FINAL_RESULT==='ปรับ').length;
+  const noPenalty = tickets.filter(t=>t.FINAL_RESULT==='ไม่ปรับ').length;
+  const pending = tickets.filter(t=>!t.STEP||t.STEP==='0'||t.STEP==='1').length;
+  const totalBaht = tickets.reduce((s,t)=>s+(parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const finalBaht = tickets.filter(t=>t.FINAL_RESULT==='ปรับ').reduce((s,t)=>s+(parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:2px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">Total (กรอง)</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(total)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">Reviewed</div>
+        <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(reviewed)}</div>
+        <div style="font-size:10px;color:var(--muted)">${total?Math.round(reviewed/total*100):0}% actual</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">รอดำเนินการ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--amber)">${fmt(pending)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">Final: ปรับ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--red)">${fmt(penalty)}</div>
+        <div style="font-size:10px;color:var(--muted)">${fmtM(finalBaht)}</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">Final: ไม่ปรับ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--green)">${fmt(noPenalty)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">Penalty รวม</div>
+        <div style="font-size:14px;font-weight:700;color:var(--red)">${fmtM(totalBaht)}</div>
+        <div style="font-size:10px;color:var(--green)">ลดได้: ${fmtM(totalBaht-finalBaht)}</div>
+      </div>
+    </div>`;
+}
+
+// ── Pivot Table by Province ──
+function renderPivotTable(tickets){
+  const wrap = $('pivot-table-wrap');
+  if(!wrap) return;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
+
+  // Group by NOR region → TRUEOWNERGROUP
+  const regionMap = {};
+  tickets.forEach(t => {
+    if(!t.TICKETID) return;
+    // Determine region: NOR1 or NOR2 from TrackB_Region
+    const reg = (t.TrackB_Region||'').includes('NOR2') || (t.TRUEOWNERGROUP||'').includes('NOR2') ? 'NOR2' : 'NOR1';
+    const grp = t.TRUEOWNERGROUP || 'Unknown';
+    if(!regionMap[reg]) regionMap[reg] = {};
+    if(!regionMap[reg][grp]) regionMap[reg][grp] = {total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+    const d = regionMap[reg][grp];
+    d.total++;
+    const s = String(t.STEP||'');
+    if(s==='1'||s==='2'||s==='3'||s==='4'||s==='5') d.step1++;
+    if(s==='2'||s==='3'||s==='4'||s==='5') d.step2++;
+    if(s==='3') d.defend++;
+    if(t.FINAL_RESULT==='ปรับ') d.final_penalty++;
+    if(t.FINAL_RESULT==='ไม่ปรับ') d.final_no_penalty++;
+    if(s==='5') d.approved++;
+    d.baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+    if(t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+  });
+
+  let rows = `<table class="pivot-table">
+    <thead><tr>
+      <th>Region</th>
+      <th>Owner Group</th>
+      <th>Total<br>Ticket</th>
+      <th>Step1<br>Submit</th>
+      <th>%S1</th>
+      <th>Step2<br>FSO</th>
+      <th>Defend</th>
+      <th>Final<br>ปรับ</th>
+      <th>Final<br>ไม่ปรับ</th>
+      <th>Approved</th>
+      <th>Penalty<br>รวม (M)</th>
+      <th>Final<br>Penalty (M)</th>
+    </tr></thead><tbody>`;
+
+  let grandTotal={total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+
+  ['NOR1','NOR2'].forEach(reg => {
+    if(!regionMap[reg]) return;
+    const groups = Object.entries(regionMap[reg]).sort((a,b)=>b[1].total-a[1].total);
+    let regT={total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+    groups.forEach(([grp,d])=>{
+      Object.keys(regT).forEach(k=>regT[k]+=d[k]);
+      const pct = d.total ? Math.round(d.step1/d.total*100) : 0;
+      rows += `<tr>
+        <td style="color:var(--muted)">${reg}</td>
+        <td style="font-size:10px">${grp.replace('TRUE-TH-BBT-','').replace('-NOP','')}</td>
+        <td>${fmt(d.total)}</td>
+        <td class="num-amber">${fmt(d.step1)}</td>
+        <td class="pct">${pct}%</td>
+        <td class="num-blue">${fmt(d.step2)}</td>
+        <td class="num-amber">${fmt(d.defend)}</td>
+        <td class="num-red">${fmt(d.final_penalty)}</td>
+        <td class="num-green">${fmt(d.final_no_penalty)}</td>
+        <td class="num-blue">${fmt(d.approved)}</td>
+        <td class="num-red">${fmtM(d.baht)}</td>
+        <td class="num-red">${fmtM(d.final_baht)}</td>
+      </tr>`;
+    });
+    const rpct = regT.total ? Math.round(regT.step1/regT.total*100) : 0;
+    rows += `<tr class="region-row">
+      <td colspan="2">🔷 ${reg} รวม</td>
+      <td>${fmt(regT.total)}</td>
+      <td>${fmt(regT.step1)}</td>
+      <td>${rpct}%</td>
+      <td>${fmt(regT.step2)}</td>
+      <td>${fmt(regT.defend)}</td>
+      <td>${fmt(regT.final_penalty)}</td>
+      <td>${fmt(regT.final_no_penalty)}</td>
+      <td>${fmt(regT.approved)}</td>
+      <td>${fmtM(regT.baht)}</td>
+      <td>${fmtM(regT.final_baht)}</td>
+    </tr>`;
+    Object.keys(grandTotal).forEach(k=>grandTotal[k]+=regT[k]);
+  });
+
+  const gpct = grandTotal.total ? Math.round(grandTotal.step1/grandTotal.total*100) : 0;
+  rows += `<tr class="total-row">
+    <td colspan="2">⭐ ผลรวม NOR1+NOR2</td>
+    <td>${fmt(grandTotal.total)}</td>
+    <td>${fmt(grandTotal.step1)}</td>
+    <td>${gpct}%</td>
+    <td>${fmt(grandTotal.step2)}</td>
+    <td>${fmt(grandTotal.defend)}</td>
+    <td>${fmt(grandTotal.final_penalty)}</td>
+    <td>${fmt(grandTotal.final_no_penalty)}</td>
+    <td>${fmt(grandTotal.approved)}</td>
+    <td>${fmtM(grandTotal.baht)}</td>
+    <td>${fmtM(grandTotal.final_baht)}</td>
+  </tr></tbody></table>`;
+
+  wrap.innerHTML = rows;
 }
 
 // ── My Tickets ──
