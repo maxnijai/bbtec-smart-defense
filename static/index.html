@@ -394,15 +394,17 @@
     <div class="page active" id="page-dashboard">
       <div id="dashboard-loading" class="loading"><div class="spinner"></div> กำลังโหลดข้อมูล...</div>
       <div id="dashboard-content" style="display:none">
-        <div class="kpi-grid" id="kpi-grid"></div>
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
-          <div class="chart-card">
-            <div class="chart-title">สัดส่วน Penalty / ไม่ Penalty</div>
-            <canvas id="chart-fso" height="180"></canvas>
+        <!-- KPI Summary Banner -->
+        <div id="kpi-grid"></div>
+        <!-- Charts row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px">
+          <div class="chart-card" style="grid-column:span 2">
+            <div class="chart-title">สัดส่วน Penalty / ไม่ Penalty รายขั้นตอน</div>
+            <canvas id="chart-fso" height="140"></canvas>
           </div>
           <div class="chart-card">
             <div class="chart-title">ยอดค่าปรับ (บาท)</div>
-            <canvas id="chart-baht" height="180"></canvas>
+            <canvas id="chart-baht" height="140"></canvas>
           </div>
         </div>
       </div>
@@ -598,44 +600,179 @@ async function loadDashboard(){
 }
 
 function renderKPI(d){
-  const pct = d.reviewed_pct;
+  const pct = d.reviewed_pct || 0;
+  const penaltyPct = d.total ? Math.round(d.fso_penalty/d.total*100) : 0;
+  const noPenaltyPct = 100 - penaltyPct;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => {
+    const v = Number(n||0);
+    return v >= 1000000 ? (v/1000000).toFixed(2) + 'M' : fmt(v);
+  };
+
   $('kpi-grid').innerHTML = `
-    <div class="kpi-card">
-      <div class="kpi-step">STEP 1</div>
-      <div class="kpi-label">Engineer Review</div>
-      <div class="kpi-val c-amber">${fmt(d.reviewed)}</div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:var(--amber)"></div></div>
-      <div class="kpi-sub">${pct}% of ${fmt(d.total)} tickets</div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:2px">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+      <div style="background:linear-gradient(135deg,#1d4ed8,#0891b2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff">
+        🛡 KPI & SUMMARY DASHBOARD
+      </div>
+      <div style="font-size:11px;color:var(--muted)">BBTEC Smart Defense — NOR1/NOR2</div>
+      <div style="margin-left:auto;display:flex;gap:8px;font-size:11px;color:var(--muted)">
+        <span>📍 Region</span><span>📍 Sub Region</span><span>📍 Province</span>
+      </div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-step">STEP 2</div>
-      <div class="kpi-label">FSO Decision</div>
-      <div class="kpi-val c-blue">${fmt(d.fso_penalty)}</div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${d.total?Math.round(d.fso_penalty/d.total*100):0}%;background:var(--accent)"></div></div>
-      <div class="kpi-sub">ปรับ ${fmt(d.fso_penalty)} / ไม่ปรับ ${fmt(d.fso_no_penalty)}</div>
+
+    <!-- 5 Steps Row -->
+    <div style="display:grid;grid-template-columns:1.4fr 1.6fr 1.3fr 1.3fr 1.3fr;gap:10px">
+
+      <!-- Step 1 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#78350f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#fcd34d">STEP 1</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">ENGINEER REVIEW</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Total Ticket</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(d.total)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Reviewed</div>
+            <div style="font-size:20px;font-weight:700;color:#f59e0b">${fmt(d.reviewed)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">% Actual</div>
+            <div style="font-size:20px;font-weight:700;color:#10b981">${pct}%</div>
+          </div>
+        </div>
+        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Penalty Amount</div>
+          <div style="font-size:15px;font-weight:700;color:#f59e0b">${fmtM(d.total_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #3b82f6">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e3a5f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#93c5fd">STEP 2</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FSO DECISION</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:6px;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ (Penalty)</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.fso_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ (No Penalty)</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.fso_no_penalty)}</div>
+          </div>
+          <div style="position:relative;width:72px;height:72px">
+            <canvas id="chart-fso-mini" width="72" height="72"></canvas>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">
+              <div style="font-size:12px;font-weight:700;color:#ef4444">${penaltyPct}%</div>
+              <div style="font-size:10px;color:#10b981">${noPenaltyPct}%</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+          <div style="background:#3d1a1a;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
+            <div style="font-size:13px;font-weight:700;color:#ef4444">${fmtM(d.total_penalty_baht)} บาท</div>
+          </div>
+          <div style="background:#1a3d2a;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">Penalty Amount (ไม่ปรับ)</div>
+            <div style="font-size:13px;font-weight:700;color:#10b981">${fmtM(d.saved_baht)} บาท</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#78350f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#fcd34d">STEP 3</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">DEFEND PROCESS</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fcd34d">ขอ DEFEND</div>
+            <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmt(d.defend_requested)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">ไม่ DEFEND</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt((d.fso_penalty||0)-(d.defend_requested||0))}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:#1a1a1a;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 1</div>
+            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_requested)}</div>
+          </div>
+          <div style="background:#1a1a1a;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 2</div>
+            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_round2||0)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #10b981">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#064e3b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#6ee7b7">STEP 4</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL RESULT</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ / ยอมรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #a78bfa">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#2e1065;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#c4b5fd">STEP 5</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">MANAGER APPROVE</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#c4b5fd">อนุมัติแล้ว</div>
+            <div style="font-size:22px;font-weight:700;color:#a78bfa">${fmt(d.approved)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">รอดำเนินการ</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(d.pending_approve)}</div>
+          </div>
+        </div>
+        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#c4b5fd">Final Penalty Amount</div>
+          <div style="font-size:14px;font-weight:700;color:#a78bfa">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
     </div>
-    <div class="kpi-card">
-      <div class="kpi-step">STEP 3</div>
-      <div class="kpi-label">Defend</div>
-      <div class="kpi-val c-amber">${fmt(d.defend_requested)}</div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${d.fso_penalty?Math.round(d.defend_requested/d.fso_penalty*100):0}%;background:var(--amber)"></div></div>
-      <div class="kpi-sub">สำเร็จ ${fmt(d.defend_success)} ครั้ง</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-step">STEP 4</div>
-      <div class="kpi-label">Final Result</div>
-      <div class="kpi-val c-green">${fmt(d.final_no_penalty)}</div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${d.total?Math.round(d.final_no_penalty/d.total*100):0}%;background:var(--green)"></div></div>
-      <div class="kpi-sub">ปรับ ${fmt(d.final_penalty)} / ไม่ปรับ ${fmt(d.final_no_penalty)}</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-step">STEP 5</div>
-      <div class="kpi-label">Manager Approve</div>
-      <div class="kpi-val c-purple">${fmt(d.approved)}</div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:100%;background:var(--purple)"></div></div>
-      <div class="kpi-sub">Final: ${fmtBaht(d.final_penalty_baht)}</div>
-    </div>
-  `;
+  </div>`;
+
+  // Render mini donut after DOM update
+  setTimeout(()=>{
+    const mini = document.getElementById('chart-fso-mini');
+    if(mini && window.Chart){
+      if(mini._chart) mini._chart.destroy();
+      mini._chart = new Chart(mini,{
+        type:'doughnut',
+        data:{labels:['ปรับ','ไม่ปรับ'],datasets:[{data:[d.fso_penalty||1,d.fso_no_penalty||1],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]},
+        options:{plugins:{legend:{display:false}},cutout:'68%',animation:{duration:600}}
+      });
+    }
+  },100);
 }
 
 function renderFsoChart(d){
