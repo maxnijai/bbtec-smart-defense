@@ -411,23 +411,23 @@
     </div>
 
     <!-- Page: Dashboard -->
-    <div class="page active" id="page-dashboard">
+    <div class="page active" id="page-dashboard" style="padding:10px 18px;display:flex;flex-direction:column;gap:8px;height:calc(100vh - 54px);overflow:hidden">
       <div id="dashboard-loading" class="loading"><div class="spinner"></div> กำลังโหลดข้อมูล...</div>
-      <div id="dashboard-content" style="display:none">
-        <!-- KPI Summary Banner -->
+      <div id="dashboard-content" style="display:none;flex-direction:column;gap:8px;flex:1;overflow:hidden">
+        <!-- KPI Banner (compact) -->
         <div id="kpi-grid"></div>
-        <!-- Summary pivot table + chart -->
-        <div style="display:grid;grid-template-columns:1fr 340px;gap:14px;margin-top:14px">
-          <div class="chart-card" style="padding:0;overflow:hidden">
-            <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-              <span style="font-size:12px;font-weight:600">📊 Overall Summary — Workflow by Province</span>
-              <span style="font-size:11px;color:var(--muted);margin-left:auto">NOR1 / NOR2</span>
+        <!-- Bottom row: Pivot + Chart — fills remaining space -->
+        <div style="display:grid;grid-template-columns:1fr 260px;gap:10px;flex:1;min-height:0;overflow:hidden">
+          <div class="chart-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0">
+            <div style="padding:7px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <span style="font-size:11px;font-weight:600">📊 Overall Summary — Workflow by Province</span>
+              <span style="font-size:10px;color:var(--muted);margin-left:auto" id="pivot-province-label">NOR1 / NOR2</span>
             </div>
-            <div id="pivot-table-wrap" style="overflow-x:auto;max-height:340px;overflow-y:auto"></div>
+            <div id="pivot-table-wrap" style="overflow:auto;flex:1"></div>
           </div>
-          <div class="chart-card">
-            <div class="chart-title">ยอดค่าปรับ (บาท)</div>
-            <canvas id="chart-baht" height="200"></canvas>
+          <div class="chart-card" style="display:flex;flex-direction:column;min-height:0">
+            <div class="chart-title" style="flex-shrink:0">ยอดค่าปรับ (บาท)</div>
+            <div style="flex:1;position:relative;min-height:0"><canvas id="chart-baht" style="position:absolute;inset:0;width:100%!important;height:100%!important"></canvas></div>
           </div>
         </div>
       </div>
@@ -503,12 +503,9 @@
       </div>
     </div>
 
-    <!-- Page: Charts -->
+    <!-- Page: Charts — Executive Summary -->
     <div class="page" id="page-charts">
-      <div class="charts-grid">
-        <div class="chart-card"><div class="chart-title">Workflow Progress รายขั้นตอน</div><canvas id="chart-steps" height="220"></canvas></div>
-        <div class="chart-card"><div class="chart-title">Defend Success Rate</div><canvas id="chart-defend" height="220"></canvas></div>
-      </div>
+      <div id="exec-summary"></div>
     </div>
   </div>
 </div>
@@ -601,7 +598,9 @@ function initApp(user){
 function showPage(page){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  $(`page-${page}`).classList.add('active');
+  const pg = $(`page-${page}`);
+  pg.classList.add('active');
+  pg.style.display = page==='dashboard' ? 'flex' : 'block';
   document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
   const titles = {
     dashboard:'Dashboard',tickets:'Ticket ทั้งหมด',
@@ -619,7 +618,7 @@ async function loadDashboard(){
     const d = await res.json();
     if(d.error){ $('dashboard-loading').textContent = d.error; return; }
     $('dashboard-loading').style.display='none';
-    $('dashboard-content').style.display='block';
+    $('dashboard-content').style.display='flex';
     renderKPI(d);
     renderFsoChart(d);
     renderBahtChart(d);
@@ -627,6 +626,13 @@ async function loadDashboard(){
   } catch(e){
     $('dashboard-loading').textContent = 'โหลดข้อมูลไม่สำเร็จ';
   }
+}
+
+function goToTicketsFiltered(step, result){
+  showPage('tickets');
+  if(step !== undefined && $('filter-step')) $('filter-step').value = String(step);
+  if(result !== undefined && $('filter-result')) $('filter-result').value = result;
+  filterTickets();
 }
 
 function renderKPI(d){
@@ -819,18 +825,35 @@ function renderFsoChart(d){
 
 function renderBahtChart(d){
   if(charts.baht) charts.baht.destroy();
+  const fmtShort = v => {
+    if(!v||v===0) return '0';
+    if(Math.abs(v)>=1000000) return (v/1000000).toFixed(1)+'M';
+    if(Math.abs(v)>=1000) return (v/1000).toFixed(0)+'K';
+    return String(Math.round(v));
+  };
+  const total = Number(d.total_penalty_baht)||0;
+  const saved = Number(d.saved_baht)||0;
+  const final = Number(d.final_penalty_baht)||0;
   charts.baht = new Chart($('chart-baht'),{
     type:'bar',
     data:{
-      labels:['ค่าปรับรวม','ลดได้','Final'],
+      labels:['รวมทั้งหมด','ลดได้จาก Defend','Final (ปรับ)'],
       datasets:[{
-        data:[d.total_penalty_baht, d.saved_baht, d.final_penalty_baht],
-        backgroundColor:['#ef4444','#10b981','#f59e0b'],borderWidth:0,borderRadius:6
+        data:[total, saved, final],
+        backgroundColor:['#ef4444','#10b981','#f59e0b'],
+        borderWidth:0, borderRadius:6
       }]
     },
     options:{
-      plugins:{legend:{display:false}},
-      scales:{y:{ticks:{color:'#8aa0c0',font:{size:10}},grid:{color:'#253550'}},x:{ticks:{color:'#8aa0c0'},grid:{display:false}}}
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>' '+Number(ctx.raw).toLocaleString('th-TH')+' บาท'}}
+      },
+      scales:{
+        y:{ticks:{color:'#8aa0c0',font:{size:9},callback:v=>fmtShort(v)},grid:{color:'#253550'}},
+        x:{ticks:{color:'#8aa0c0',font:{size:9}},grid:{display:false}}
+      }
     }
   });
 }
@@ -969,12 +992,12 @@ function renderTicketsKPI(tickets){
   const finalBaht = tickets.filter(t=>t.FINAL_RESULT==='ปรับ').reduce((s,t)=>s+(parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:2px">
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('','');showPage('tickets')">
         <div style="font-size:10px;color:var(--muted)">Total (กรอง)</div>
         <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(total)}</div>
         <div style="font-size:10px;color:var(--muted)">tickets</div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('1','')">
         <div style="font-size:10px;color:var(--muted)">Reviewed</div>
         <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(reviewed)}</div>
         <div style="font-size:10px;color:var(--muted)">${total?Math.round(reviewed/total*100):0}% actual</div>
@@ -984,17 +1007,17 @@ function renderTicketsKPI(tickets){
         <div style="font-size:20px;font-weight:700;color:var(--amber)">${fmt(pending)}</div>
         <div style="font-size:10px;color:var(--muted)">tickets</div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:10px 12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('4','ปรับ')">
         <div style="font-size:10px;color:var(--muted)">Final: ปรับ</div>
         <div style="font-size:20px;font-weight:700;color:var(--red)">${fmt(penalty)}</div>
         <div style="font-size:10px;color:var(--muted)">${fmtM(finalBaht)}</div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('4','ไม่ปรับ')">
         <div style="font-size:10px;color:var(--muted)">Final: ไม่ปรับ</div>
         <div style="font-size:20px;font-weight:700;color:var(--green)">${fmt(noPenalty)}</div>
         <div style="font-size:10px;color:var(--muted)">tickets</div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:8px;padding:10px 12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('','')">
         <div style="font-size:10px;color:var(--muted)">Penalty รวม</div>
         <div style="font-size:14px;font-weight:700;color:var(--red)">${fmtM(totalBaht)}</div>
         <div style="font-size:10px;color:var(--green)">ลดได้: ${fmtM(totalBaht-finalBaht)}</div>
@@ -1140,29 +1163,125 @@ function renderMyTickets(){
 
 // ── Charts ──
 function renderCharts(){
-  const steps = [0,0,0,0,0];
-  allTickets.forEach(t => { const s=parseInt(t.STEP||0); if(s>=1&&s<=5) steps[s-1]++; });
-  if(charts.steps) charts.steps.destroy();
-  charts.steps = new Chart($('chart-steps'),{
-    type:'bar',
-    data:{
-      labels:['Step 1','Step 2','Step 3\nDefend','Step 4\nFinal','Step 5\nApprove'],
-      datasets:[{data:steps,backgroundColor:['#f59e0b','#3b82f6','#ef4444','#10b981','#a78bfa'],borderWidth:0,borderRadius:6}]
-    },
-    options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#8aa0c0'},grid:{color:'#253550'}},x:{ticks:{color:'#8aa0c0'},grid:{display:false}}}}
-  });
+  const el = $('exec-summary');
+  if(!el) return;
+  const t = allTickets;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
 
-  const defended = allTickets.filter(t=>parseInt(t.DEFEND_COUNT||0)>0).length;
-  const defendWon = allTickets.filter(t=>parseInt(t.DEFEND_COUNT||0)>0 && t.FINAL_RESULT==='ไม่ปรับ').length;
-  if(charts.defend) charts.defend.destroy();
-  charts.defend = new Chart($('chart-defend'),{
-    type:'doughnut',
-    data:{
-      labels:['Defend สำเร็จ','Defend ไม่สำเร็จ','ไม่ได้ Defend'],
-      datasets:[{data:[defendWon,defended-defendWon,allTickets.length-defended],backgroundColor:['#10b981','#ef4444','#374151'],borderWidth:0}]
-    },
-    options:{plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:11}}}},cutout:'60%'}
+  const total = t.length;
+  const reviewed = t.filter(x=>x.STEP&&x.STEP!=='0').length;
+  const step2 = t.filter(x=>['2','3','4','5'].includes(x.STEP)).length;
+  const defended = t.filter(x=>parseInt(x.DEFEND_COUNT||0)>0).length;
+  const defendWon = t.filter(x=>parseInt(x.DEFEND_COUNT||0)>0&&x.FINAL_RESULT==='ไม่ปรับ').length;
+  const finalPenalty = t.filter(x=>x.FINAL_RESULT==='ปรับ').length;
+  const finalNoPenalty = t.filter(x=>x.FINAL_RESULT==='ไม่ปรับ').length;
+  const approved = t.filter(x=>x.STEP==='5').length;
+  const totalBaht = t.reduce((s,x)=>s+(parseFloat(String(x.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const finalBaht = t.filter(x=>x.FINAL_RESULT==='ปรับ').reduce((s,x)=>s+(parseFloat(String(x.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const savedBaht = Math.max(0, totalBaht - finalBaht);
+  const defendRate = defended>0?Math.round(defendWon/defended*100):0;
+  const completionRate = total>0?Math.round((finalPenalty+finalNoPenalty)/total*100):0;
+
+  // Top pending by owner group
+  const groupMap = {};
+  t.filter(x=>!x.STEP||x.STEP==='0'||x.STEP==='1').forEach(x=>{
+    const g = (x.TRUEOWNERGROUP||'Unknown').replace('TRUE-TH-BBT-','').replace('-NOP','');
+    groupMap[g] = (groupMap[g]||0)+1;
   });
+  const topGroups = Object.entries(groupMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  el.innerHTML = \`
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+
+    <!-- Summary metrics -->
+    <div class="chart-card">
+      <div class="chart-title" style="font-size:13px;margin-bottom:12px">📈 Executive Summary</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        \${[
+          {l:'Total Tickets',v:fmt(total),c:'var(--text)'},
+          {l:'Engineer Reviewed',v:fmt(reviewed)+' ('+Math.round(reviewed/total*100||0)+'%)',c:'var(--amber)'},
+          {l:'FSO Processed',v:fmt(step2)+' ('+Math.round(step2/total*100||0)+'%)',c:'var(--accent)'},
+          {l:'ขอ Defend ทั้งหมด',v:fmt(defended)+' tickets',c:'var(--amber)'},
+          {l:'Defend สำเร็จ (ไม่ปรับ)',v:fmt(defendWon)+' ('+defendRate+'%)',c:'var(--green)'},
+          {l:'Final: ปรับ',v:fmt(finalPenalty)+' tickets',c:'var(--red)'},
+          {l:'Final: ไม่ปรับ',v:fmt(finalNoPenalty)+' tickets',c:'var(--green)'},
+          {l:'Manager Approved',v:fmt(approved)+' tickets',c:'var(--purple)'},
+          {l:'Completion Rate',v:completionRate+'%',c:completionRate>70?'var(--green)':'var(--amber)'},
+        ].map(r=>\`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:12px;color:var(--muted)">\${r.l}</span>
+            <span style="font-size:13px;font-weight:600;color:\${r.c}">\${r.v}</span>
+          </div>\`).join('')}
+      </div>
+    </div>
+
+    <!-- Penalty breakdown -->
+    <div class="chart-card">
+      <div class="chart-title" style="font-size:13px;margin-bottom:12px">💰 Penalty Breakdown</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#3d1a1a;border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">ค่าปรับรวมทั้งหมด</div>
+          <div style="font-size:24px;font-weight:700;color:#ef4444">\${fmtM(totalBaht)}</div>
+          <div style="font-size:10px;color:var(--muted)">บาท</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#1a3d2a;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ลดได้จาก Defend</div>
+            <div style="font-size:18px;font-weight:700;color:#10b981">\${fmtM(savedBaht)}</div>
+            <div style="font-size:10px;color:var(--muted)">บาท</div>
+          </div>
+          <div style="background:#3d1a1a;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
+            <div style="font-size:18px;font-weight:700;color:#ef4444">\${fmtM(finalBaht)}</div>
+            <div style="font-size:10px;color:var(--muted)">บาท</div>
+          </div>
+        </div>
+        <canvas id="chart-exec-baht" height="160"></canvas>
+      </div>
+    </div>
+
+    <!-- Top pending groups -->
+    <div class="chart-card">
+      <div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม (รอ Step 1)</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        \${topGroups.map(([g,n],i)=>{
+          const barW = Math.round(n/topGroups[0][1]*100);
+          return \`<div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">\${g}</span>
+              <span style="font-size:11px;font-weight:600;color:var(--amber)">\${n}</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px">
+              <div style="height:100%;width:\${barW}%;background:\${i===0?'#ef4444':i<3?'#f59e0b':'#3b82f6'};border-radius:3px"></div>
+            </div>
+          </div>\`;
+        }).join('')}
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">
+          รอดำเนินการทั้งหมด: <b style="color:var(--amber)">\${fmt(total-reviewed)}</b> tickets
+        </div>
+      </div>
+    </div>
+  </div>
+  \`;
+
+  // Render exec baht chart
+  setTimeout(()=>{
+    const c = $('chart-exec-baht');
+    if(!c) return;
+    if(c._chart) c._chart.destroy();
+    c._chart = new Chart(c, {
+      type:'doughnut',
+      data:{
+        labels:['Final ปรับ','ลดได้จาก Defend'],
+        datasets:[{data:[finalBaht, savedBaht],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]
+      },
+      options:{
+        plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:10}}}},
+        cutout:'60%'
+      }
+    });
+  },100);
 }
 
 // ── Link helper ──
