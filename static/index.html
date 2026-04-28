@@ -813,7 +813,7 @@ function isManagerRole(role){
 // ── Modal ──
 function openTicket(ticket){
   const role = currentUser?.role || '';
-  const step = String(ticket.STEP||'');
+  const step = String(ticket.STEP||'').trim();
   const locked = String(ticket.LOCKED||'').toUpperCase()==='TRUE';
   const defendCount = parseInt(ticket.DEFEND_COUNT||0);
   // Read FSO decision — try multiple possible column name variants
@@ -874,33 +874,43 @@ function openTicket(ticket){
 
   // Step 2 — Engineer เห็นผลการพิจารณา FSO + ตัดสินใจ Defend หรือ ยอมรับ
   else if(isEngineerRole(role) && !locked && step==='2'){
-    const isPenalty = fsoDecision === 'ปรับ';
-    const canDefend = isPenalty && defendCount < 2;
+    // Step=2 หมายความว่า FSO พิจารณาแล้ว (ปรับ)
+    // ถ้า fsoDecision ว่าง แสดงว่า column name ไม่ตรง แต่ step=2 = FSO ปรับแล้ว
+    const isPenalty = fsoDecision === 'ปรับ' || fsoDecision === '' || !fsoDecision;
+    const isNoPenalty = fsoDecision === 'ไม่ปรับ';
+    const canDefend = isPenalty && !isNoPenalty && defendCount < 2;
+    const fsoLabel = isNoPenalty ? '🟢 ไม่ปรับ' : '🔴 ปรับ';
+    const fsoBg = isNoPenalty ? '#1a3d2a' : '#3d1a1a';
+    const fsoBorder = isNoPenalty ? '#10b981' : '#ef4444';
+    const fsoColor = isNoPenalty ? '#6ee7b7' : '#fca5a5';
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 2 — ผลการพิจารณาจาก FSO</div>
         <div style="padding:14px;border-radius:10px;margin-bottom:14px;text-align:center;
-          background:${isPenalty?'#3d1a1a':'#1a3d2a'};
-          border:2px solid ${isPenalty?'#ef4444':'#10b981'}">
+          background:${fsoBg};border:2px solid ${fsoBorder}">
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px">ผลการพิจารณา FSO</div>
-          <div style="font-size:22px;font-weight:700;color:${isPenalty?'#fca5a5':'#6ee7b7'}">
-            ${isPenalty ? '🔴 ปรับ' : fsoDecision ? '🟢 ไม่ปรับ' : '⏳ รอ FSO พิจารณา'}
-          </div>
-          ${isPenalty ? `<div style="font-size:11px;color:#fca5a5;margin-top:4px">Defend ได้อีก ${2-defendCount} ครั้ง</div>` : ''}
+          <div style="font-size:22px;font-weight:700;color:${fsoColor}">${fsoLabel}</div>
+          ${canDefend ? `<div style="font-size:11px;color:#fca5a5;margin-top:4px">Defend ได้อีก ${2-defendCount} ครั้ง</div>` : ''}
         </div>
-        ${canDefend ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <button class="btn-submit" style="background:#1e3a5f;border:2px solid #3b82f6;padding:14px;border-radius:10px;font-size:13px"
-            onclick="showDefendForm('${ticket.TICKETID}',${defendCount})">
-            ⚔️ ขอ Defend (ครั้งที่ ${defendCount+1}/2)
-          </button>
-          <button class="btn-submit" style="background:#3d1a1a;border:2px solid #ef4444;padding:14px;border-radius:10px;font-size:13px"
-            onclick="acceptPenalty('${ticket.TICKETID}')">
-            ✋ ยอมรับค่าปรับ
-          </button>
-        </div>` : 
-        fsoDecision === 'ไม่ปรับ' ? `<div style="text-align:center;color:#6ee7b7;padding:12px">✅ ไม่มีค่าปรับ — รอ Manager Approve</div>` :
-        `<div style="text-align:center;color:var(--muted);padding:12px">⏳ รอ FSO พิจารณาก่อนครับ</div>`}
+        ${isNoPenalty ? 
+          `<div style="text-align:center;color:#6ee7b7;padding:12px;background:#1a3d2a;border-radius:8px">
+            ✅ FSO ตัดสิน ไม่ปรับ — ข้อมูลถูก Lock รอ Manager Approve
+          </div>` :
+          canDefend ? `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button class="btn-submit" style="background:#1e3a5f;border:2px solid #3b82f6;padding:14px;border-radius:10px;font-size:13px;cursor:pointer"
+              onclick="showDefendForm('${ticket.TICKETID}',${defendCount})">
+              ⚔️ ขอ Defend<br><small>ครั้งที่ ${defendCount+1}/2</small>
+            </button>
+            <button class="btn-submit" style="background:#3d1a1a;border:2px solid #ef4444;padding:14px;border-radius:10px;font-size:13px;cursor:pointer"
+              onclick="acceptPenalty('${ticket.TICKETID}')">
+              ✋ ยอมรับค่าปรับ<br><small>ส่ง Step 4</small>
+            </button>
+          </div>` :
+          `<div style="text-align:center;color:#fca5a5;padding:12px;background:#3d1a1a;border-radius:8px">
+            หมดสิทธิ์ Defend แล้ว (ครบ 2 ครั้ง) — รอ Manager Approve
+          </div>`
+        }
       </div>`;
   }
 
@@ -950,27 +960,6 @@ function openTicket(ticket){
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
           <button class="btn-submit" id="btn-fso-submit" disabled onclick="submitStep2('${ticket.TICKETID}')">ยืนยัน Step 2 🔒</button>
-        </div>
-      </div>`;
-  }
-
-  // Step 3 Defend request (Engineer)
-  else if(isEngineerRole(role) && !locked && ['2','3'].includes(step) && fsoDecision==='ปรับ' && defendCount<2){
-    formHTML = `
-      <div class="form-section">
-        <div class="form-section-title">STEP 3 — ขอ Defend</div>
-        <div class="defend-counter">
-          <div style="font-size:11px;color:var(--muted)">ใช้ไปแล้ว</div>
-          <div class="defend-dots">
-            ${[0,1].map(i=>`<div class="defend-dot ${i<defendCount?'used':''}"></div>`).join('')}
-          </div>
-          <div style="font-size:11px;color:var(--amber)">${defendCount}/2 ครั้ง — เหลือ ${2-defendCount} ครั้ง</div>
-        </div>
-        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">เหตุผลการขอ Defend</div>
-          <textarea class="form-textarea" id="f-defend-reason" placeholder="อธิบายเหตุผลที่ไม่สมควรถูกปรับ..."></textarea></div>
-        <div class="modal-actions">
-          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
-          <button class="btn-submit" onclick="submitDefendRequest('${ticket.TICKETID}')">ส่งคำขอ Defend ครั้งที่ ${defendCount+1}</button>
         </div>
       </div>`;
   }
