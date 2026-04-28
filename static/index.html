@@ -746,7 +746,7 @@ function renderKPI(d){
           </div>
           <div style="text-align:center">
             <div style="font-size:10px;color:var(--muted)">ไม่ DEFEND</div>
-            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt((d.fso_penalty||0)-(d.defend_requested||0))}</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(Math.max(0,(d.fso_penalty||0)-(d.defend_requested||0)))}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -1070,13 +1070,26 @@ function renderPivotTable(tickets){
   const fmt = n => Number(n||0).toLocaleString('th-TH');
   const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
 
-  // Group by NOR region → TRUEOWNERGROUP
+  // Helper: normalize group name — merge WIFI into base province group
+  function normalizeGroup(ownerGroup) {
+    if(!ownerGroup) return 'Unknown';
+    // e.g. "BBT-NOR1-CMI1-WIFI" → "TRUE-TH-BBT-NOR1-CMI1-NOP" (merge into NOP group)
+    // "TRUE-TH-BBT-NOR1-CMI1-NOP" stays as is
+    const g = ownerGroup.replace('TRUE-TH-BBT-','').replace('-NOP','');
+    // If contains WIFI, strip it and map to the province
+    if(g.includes('-WIFI')) {
+      return g.replace('-WIFI','').replace('BBT-','TRUE-TH-BBT-') + '-NOP';
+    }
+    return ownerGroup;
+  }
+
+  // Group by NOR region → TRUEOWNERGROUP (WIFI merged into province)
   const regionMap = {};
   tickets.forEach(t => {
     if(!t.TICKETID) return;
     // Determine region: NOR1 or NOR2 from TrackB_Region
     const reg = (t.TrackB_Region||'').includes('NOR2') || (t.TRUEOWNERGROUP||'').includes('NOR2') ? 'NOR2' : 'NOR1';
-    const grp = t.TRUEOWNERGROUP || 'Unknown';
+    const grp = normalizeGroup(t.TRUEOWNERGROUP) || 'Unknown';
     if(!regionMap[reg]) regionMap[reg] = {};
     if(!regionMap[reg][grp]) regionMap[reg][grp] = {total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
     const d = regionMap[reg][grp];
