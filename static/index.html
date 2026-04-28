@@ -684,9 +684,13 @@ async function loadTickets(){
   } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ' }
 }
 
-function stepBadge(step){
+function stepBadge(step, defendCount){
   if(!step) return '<span class="badge badge-1">รอ Step 1</span>';
-  const labels={1:'Step 1',2:'Step 2',3:'Defend',4:'Final',5:'✓ Done'};
+  if(step==='3'){
+    const round = parseInt(defendCount||0) || 1;
+    return `<span class="badge badge-3">⚔️ Defend ${round}/2</span>`;
+  }
+  const labels={'1':'Step 1','2':'Step 2','4':'Final','5':'✓ Done'};
   return `<span class="badge badge-${step}">${labels[step]||step}</span>`;
 }
 
@@ -708,7 +712,7 @@ function renderTicketTable(tickets){
       <td>${t.TrackB_Region||'—'}</td>
       <td>${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
       <td>${resultBadge(t['FSO พิจารณา (ปรับ/ไม่ปรับ)'])}</td>
-      <td>${stepBadge(t.STEP)}</td>
+      <td>${stepBadge(t.STEP, t.DEFEND_COUNT)}</td>
       <td>${resultBadge(t.FINAL_RESULT)}</td>
       <td><button class="btn-action" onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>จัดการ</button></td>
     </tr>
