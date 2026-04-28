@@ -1166,8 +1166,8 @@ function renderCharts(){
   const el = $('exec-summary');
   if(!el) return;
   const t = allTickets;
-  const fmt = n => Number(n||0).toLocaleString('th-TH');
-  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
+  const fmtN = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmtN(v); };
 
   const total = t.length;
   const reviewed = t.filter(x=>x.STEP&&x.STEP!=='0').length;
@@ -1191,84 +1191,81 @@ function renderCharts(){
   });
   const topGroups = Object.entries(groupMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
-  el.innerHTML = \`
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+  const metrics = [
+    {l:'Total Tickets', v:fmtN(total), c:'var(--text)'},
+    {l:'Engineer Reviewed', v:fmtN(reviewed)+' ('+Math.round(reviewed/total*100||0)+'%)', c:'var(--amber)'},
+    {l:'FSO Processed', v:fmtN(step2)+' ('+Math.round(step2/total*100||0)+'%)', c:'var(--accent)'},
+    {l:'ขอ Defend ทั้งหมด', v:fmtN(defended)+' tickets', c:'var(--amber)'},
+    {l:'Defend สำเร็จ (ไม่ปรับ)', v:fmtN(defendWon)+' ('+defendRate+'%)', c:'var(--green)'},
+    {l:'Final: ปรับ', v:fmtN(finalPenalty)+' tickets', c:'var(--red)'},
+    {l:'Final: ไม่ปรับ', v:fmtN(finalNoPenalty)+' tickets', c:'var(--green)'},
+    {l:'Manager Approved', v:fmtN(approved)+' tickets', c:'var(--purple)'},
+    {l:'Completion Rate', v:completionRate+'%', c:completionRate>70?'var(--green)':'var(--amber)'},
+  ];
 
-    <!-- Summary metrics -->
-    <div class="chart-card">
-      <div class="chart-title" style="font-size:13px;margin-bottom:12px">📈 Executive Summary</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        \${[
-          {l:'Total Tickets',v:fmt(total),c:'var(--text)'},
-          {l:'Engineer Reviewed',v:fmt(reviewed)+' ('+Math.round(reviewed/total*100||0)+'%)',c:'var(--amber)'},
-          {l:'FSO Processed',v:fmt(step2)+' ('+Math.round(step2/total*100||0)+'%)',c:'var(--accent)'},
-          {l:'ขอ Defend ทั้งหมด',v:fmt(defended)+' tickets',c:'var(--amber)'},
-          {l:'Defend สำเร็จ (ไม่ปรับ)',v:fmt(defendWon)+' ('+defendRate+'%)',c:'var(--green)'},
-          {l:'Final: ปรับ',v:fmt(finalPenalty)+' tickets',c:'var(--red)'},
-          {l:'Final: ไม่ปรับ',v:fmt(finalNoPenalty)+' tickets',c:'var(--green)'},
-          {l:'Manager Approved',v:fmt(approved)+' tickets',c:'var(--purple)'},
-          {l:'Completion Rate',v:completionRate+'%',c:completionRate>70?'var(--green)':'var(--amber)'},
-        ].map(r=>\`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:12px;color:var(--muted)">\${r.l}</span>
-            <span style="font-size:13px;font-weight:600;color:\${r.c}">\${r.v}</span>
-          </div>\`).join('')}
-      </div>
-    </div>
+  let metricsHTML = '';
+  metrics.forEach(r => {
+    metricsHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">';
+    metricsHTML += '<span style="font-size:12px;color:var(--muted)">'+r.l+'</span>';
+    metricsHTML += '<span style="font-size:13px;font-weight:600;color:'+r.c+'">'+r.v+'</span>';
+    metricsHTML += '</div>';
+  });
 
-    <!-- Penalty breakdown -->
-    <div class="chart-card">
-      <div class="chart-title" style="font-size:13px;margin-bottom:12px">💰 Penalty Breakdown</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="background:#3d1a1a;border-radius:8px;padding:12px;text-align:center">
-          <div style="font-size:10px;color:#fca5a5">ค่าปรับรวมทั้งหมด</div>
-          <div style="font-size:24px;font-weight:700;color:#ef4444">\${fmtM(totalBaht)}</div>
-          <div style="font-size:10px;color:var(--muted)">บาท</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:#1a3d2a;border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:10px;color:#6ee7b7">ลดได้จาก Defend</div>
-            <div style="font-size:18px;font-weight:700;color:#10b981">\${fmtM(savedBaht)}</div>
-            <div style="font-size:10px;color:var(--muted)">บาท</div>
-          </div>
-          <div style="background:#3d1a1a;border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
-            <div style="font-size:18px;font-weight:700;color:#ef4444">\${fmtM(finalBaht)}</div>
-            <div style="font-size:10px;color:var(--muted)">บาท</div>
-          </div>
-        </div>
-        <canvas id="chart-exec-baht" height="160"></canvas>
-      </div>
-    </div>
+  let barsHTML = '';
+  topGroups.forEach(function(entry, i) {
+    const g = entry[0], n = entry[1];
+    const barW = Math.round(n/topGroups[0][1]*100);
+    const barColor = i===0?'#ef4444':i<3?'#f59e0b':'#3b82f6';
+    barsHTML += '<div>';
+    barsHTML += '<div style="display:flex;justify-content:space-between;margin-bottom:3px">';
+    barsHTML += '<span style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">'+g+'</span>';
+    barsHTML += '<span style="font-size:11px;font-weight:600;color:var(--amber)">'+n+'</span>';
+    barsHTML += '</div>';
+    barsHTML += '<div style="height:6px;background:var(--border);border-radius:3px">';
+    barsHTML += '<div style="height:100%;width:'+barW+'%;background:'+barColor+';border-radius:3px"></div>';
+    barsHTML += '</div></div>';
+  });
 
-    <!-- Top pending groups -->
-    <div class="chart-card">
-      <div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม (รอ Step 1)</div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        \${topGroups.map(([g,n],i)=>{
-          const barW = Math.round(n/topGroups[0][1]*100);
-          return \`<div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-              <span style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">\${g}</span>
-              <span style="font-size:11px;font-weight:600;color:var(--amber)">\${n}</span>
-            </div>
-            <div style="height:6px;background:var(--border);border-radius:3px">
-              <div style="height:100%;width:\${barW}%;background:\${i===0?'#ef4444':i<3?'#f59e0b':'#3b82f6'};border-radius:3px"></div>
-            </div>
-          </div>\`;
-        }).join('')}
-        <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">
-          รอดำเนินการทั้งหมด: <b style="color:var(--amber)">\${fmt(total-reviewed)}</b> tickets
-        </div>
-      </div>
-    </div>
-  </div>
-  \`;
+  el.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">📈 Executive Summary</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + metricsHTML + '</div>' +
+      '</div>' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">💰 Penalty Breakdown</div>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+          '<div style="background:#3d1a1a;border-radius:8px;padding:12px;text-align:center">' +
+            '<div style="font-size:10px;color:#fca5a5">ค่าปรับรวมทั้งหมด</div>' +
+            '<div style="font-size:24px;font-weight:700;color:#ef4444">'+fmtM(totalBaht)+'</div>' +
+            '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div style="background:#1a3d2a;border-radius:8px;padding:10px;text-align:center">' +
+              '<div style="font-size:10px;color:#6ee7b7">ลดได้จาก Defend</div>' +
+              '<div style="font-size:18px;font-weight:700;color:#10b981">'+fmtM(savedBaht)+'</div>' +
+              '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+            '</div>' +
+            '<div style="background:#3d1a1a;border-radius:8px;padding:10px;text-align:center">' +
+              '<div style="font-size:10px;color:#fca5a5">Final Penalty</div>' +
+              '<div style="font-size:18px;font-weight:700;color:#ef4444">'+fmtM(finalBaht)+'</div>' +
+              '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+            '</div>' +
+          '</div>' +
+          '<canvas id="chart-exec-baht" height="160"></canvas>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' + barsHTML +
+          '<div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">รอดำเนินการทั้งหมด: <b style="color:var(--amber)">'+fmtN(total-reviewed)+'</b> tickets</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
 
-  // Render exec baht chart
-  setTimeout(()=>{
+  setTimeout(function(){
     const c = $('chart-exec-baht');
-    if(!c) return;
+    if(!c||!window.Chart) return;
     if(c._chart) c._chart.destroy();
     c._chart = new Chart(c, {
       type:'doughnut',
@@ -1284,7 +1281,6 @@ function renderCharts(){
   },100);
 }
 
-// ── Link helper ──
 function linkify(text){
   if(!text) return '—';
   const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
