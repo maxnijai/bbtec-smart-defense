@@ -787,6 +787,15 @@ function renderCharts(){
   });
 }
 
+// ── Link helper ──
+function linkify(text){
+  if(!text) return '—';
+  const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+  return String(text).replace(urlRegex, url =>
+    `<a href="${url}" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:underline;word-break:break-all">${url}</a>`
+  );
+}
+
 // ── Role helpers (case-insensitive, matches ENGINEER_ZONE etc) ──
 function isEngineerRole(role){
   const r = (role||'').toUpperCase();
@@ -807,7 +816,12 @@ function openTicket(ticket){
   const step = String(ticket.STEP||'');
   const locked = String(ticket.LOCKED||'').toUpperCase()==='TRUE';
   const defendCount = parseInt(ticket.DEFEND_COUNT||0);
-  const fsoDecision = ticket['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'';
+  // Read FSO decision — try multiple possible column name variants
+  const fsoDecision = (
+    ticket['FSO พิจารณา (ปรับ/ไม่ปรับ)'] ||
+    ticket['FSO พิจารณา'] ||
+    ticket['fso_decision'] || ''
+  ).trim();
 
   $('modal-tid').textContent = `🎫 ${ticket.TICKETID}`;
 
@@ -858,11 +872,35 @@ function openTicket(ticket){
       <div class="form-section">
         <div class="form-section-title">STEP 2 — FSO พิจารณา</div>
         <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div><span style="color:var(--muted)">Group: </span><b style="color:var(--text)">${ticket['Group problem']||'—'} ${ticket['Sub Problem']?'/ '+ticket['Sub Problem']:''}</b></div>
-            <div><span style="color:var(--muted)">Accident: </span><b style="color:var(--text)">${ticket.Accident||'—'}</b></div>
+          <!-- FSO KEY INFO — highlighted for decision making -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--muted)">Group Problem</div>
+              <div style="font-weight:600;color:var(--text)">${ticket['Group problem']||'—'}</div>
+            </div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--muted)">Sub Problem ⭐</div>
+              <div style="font-weight:600;color:var(--accent2)">${ticket['Sub Problem']||'—'}</div>
+            </div>
           </div>
-          <div style="margin-top:6px"><span style="color:var(--muted)">Overdue Detail + Link รูป (AG): </span><span style="color:var(--text)">${ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—'}</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--muted)">TARGETFINISH</div>
+              <div style="font-weight:500;color:var(--text)">${ticket.TARGETFINISH||'—'}</div>
+            </div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--muted)">ACT_RESTORATIONDATE ⭐</div>
+              <div style="font-weight:600;color:var(--amber)">${ticket.ACT_RESTORATIONDATE||ticket.ACT_RESTORATIONDATE||'—'}</div>
+            </div>
+          </div>
+          <div style="background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:10px;margin-bottom:4px">
+            <div style="font-size:10px;color:#6ee7b7;margin-bottom:4px">📎 Overdue Detail + Link รูป (AG) ⭐</div>
+            <div style="font-size:12px;color:var(--text)">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
+          </div>
+          <div style="background:#1a2640;border:1px solid #253550;border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:#93c5fd;margin-bottom:4px">🔗 แนบ LINK ชี้แจง (AH) ⭐</div>
+            <div style="font-size:12px">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
+          </div>
         </div>
         <div class="decision-row">
           <button class="dec-btn" id="dec-penalty" onclick="selectDecision('ปรับ')">🔴 ปรับ</button>
@@ -879,7 +917,7 @@ function openTicket(ticket){
   }
 
   // Step 3 Defend request (Engineer)
-  else if(isEngineerRole(role) && !locked && (step==='2'||step==='3') && fsoDecision==='ปรับ' && defendCount<2){
+  else if(isEngineerRole(role) && !locked && ['2','3'].includes(step) && fsoDecision==='ปรับ' && defendCount<2){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 3 — ขอ Defend</div>
@@ -954,11 +992,20 @@ function openTicket(ticket){
       <div class="detail-item"><div class="detail-label">TRUESEVERITY / URGENCY</div><div class="detail-val">${ticket.TRUESEVERITY_DESC||'—'} / ${ticket.TRUEURGENCY||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">CREATIONDATE</div><div class="detail-val">${ticket.CREATIONDATE||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">TARGETFINISH</div><div class="detail-val">${ticket.TARGETFINISH||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">ACT_RESTORATIONDATE (จริง)</div><div class="detail-val" style="color:var(--amber)">${ticket.ACT_RESTORATIONDATE||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">ค่าปรับ (บาท)</div><div class="detail-val" style="color:var(--red);font-size:18px;font-weight:600">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div></div>
       <div class="detail-item"><div class="detail-label">PENALTY_FLAG / PENALTYHOUR</div><div class="detail-val">${ticket.PENALTY_FLAG||'—'} / ${ticket.PENALTYHOUR_TRACKB||'—'} hr</div></div>
       <div class="detail-item"><div class="detail-label">Owner Group (CONTRACTTICKET)</div><div class="detail-val">${ticket['CONTRACTTICKET_TRACKB (groups)']||ticket.CONTRACTTICKET_TRACKB||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">Group Problem (กรอกแล้ว)</div><div class="detail-val">${ticket['Group problem']||'—'}</div></div>
       <div class="detail-item"><div class="detail-label">FSO ตัดสิน</div><div class="detail-val">${resultBadge(fsoDecision)}</div></div>
+      <div class="detail-item" style="grid-column:span 2">
+        <div class="detail-label">แนบ LINK ชี้แจง (AH)</div>
+        <div class="detail-val" style="font-size:12px">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
+      </div>
+      <div class="detail-item" style="grid-column:span 2">
+        <div class="detail-label">Overdue Detail + Link รูป (AG)</div>
+        <div class="detail-val" style="font-size:12px">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
+      </div>
     </div>
     ${formHTML}
   `;
