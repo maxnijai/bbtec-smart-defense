@@ -243,6 +243,51 @@ def require_role(*roles):
 # Routes — Auth
 # ─────────────────────────────────────────────
 @app.route("/api/login", methods=["POST"])
+# -----------------------------------------
+# Audit Log
+# -----------------------------------------
+def write_audit(ticketid, action, detail, step_from="", step_to=""):
+    try:
+        sheet = get_sheet("SD_AUDIT_LOG")
+        sheet.append_row([
+            now_str(), session.get("user",""), session.get("name",""),
+            session.get("role",""), ticketid, action, detail, step_from, step_to,
+        ], value_input_option="USER_ENTERED")
+    except Exception:
+        pass
+
+@app.route("/api/ticket/<ticketid>/audit")
+@login_required
+def get_audit(ticketid):
+    try:
+        sheet = get_sheet("SD_AUDIT_LOG")
+        rows = sheet.get_all_values()
+        logs = []
+        for r in rows[1:]:
+            if len(r) >= 5 and r[4] == ticketid:
+                logs.append({"timestamp":r[0],"user":r[1],"name":r[2],"role":r[3],
+                    "action":r[5] if len(r)>5 else "","detail":r[6] if len(r)>6 else "",
+                    "step_from":r[7] if len(r)>7 else "","step_to":r[8] if len(r)>8 else ""})
+        logs.reverse()
+        return jsonify({"logs": logs})
+    except Exception as e:
+        return jsonify({"logs": [], "error": str(e)})
+
+@app.route("/api/audit/init")
+@login_required
+def init_audit_sheet():
+    try:
+        gc = get_gc()
+        wb = gc.open_by_key(SPREADSHEET_ID)
+        try:
+            wb.worksheet("SD_AUDIT_LOG")
+        except Exception:
+            ws = wb.add_worksheet("SD_AUDIT_LOG", rows=5000, cols=9)
+            ws.append_row(["TIMESTAMP","USER","NAME","ROLE","TICKETID","ACTION","DETAIL","STEP_FROM","STEP_TO"])
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 def login():
     data = request.json or {}
     username = data.get("username", "").strip()
@@ -403,6 +448,7 @@ def submit_step1(ticketid):
             COL_UPDATED_BY:     session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
+        write_audit(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')} Sub:{data.get('sub_problem','')}", "", "1")
         return jsonify({"success": True, "message": "บันทึก Step 1 สำเร็จ ยืนยันแล้วไม่สามารถแก้ไขได้"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -451,6 +497,7 @@ def submit_step2(ticketid):
             fields[COL_LOCKED]       = "TRUE"
 
         update_ticket_fields(sheet, headers, row_idx, fields)
+        write_audit(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", "4" if decision=="ไม่ปรับ" else "2")
         msg = "FSO ตัดสิน: ไม่ปรับ — Lock และส่ง Step 4 แล้ว" if decision == "ไม่ปรับ" else "FSO ตัดสิน: ปรับ — Engineer สามารถขอ Defend ได้"
         return jsonify({"success": True, "message": msg, "fso_decision": decision})
     except Exception as e:
@@ -509,6 +556,7 @@ def request_defend(ticketid):
             COL_UPDATED_BY:   session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
+        write_audit(ticketid, "DEFEND_REQUEST", f"ครั้งที่:{defend_count+1} เหตุผล:{defend_reason[:80]}", "2", "3")
         return jsonify({
             "success": True,
             "message": f"ส่งคำขอ Defend ครั้งที่ {defend_count + 1} สำเร็จ",
@@ -603,6 +651,7 @@ def accept_penalty(ticketid):
             COL_UPDATED_BY:   session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
+        write_audit(ticketid, "ACCEPT_PENALTY", "Engineer ยอมรับค่าปรับ", "2", "4")
         return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว — ส่ง Step 4 รอ Manager Approve"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -636,6 +685,7 @@ def manager_approve(ticketid):
             COL_REVIEWER:     session.get("name"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
+        write_audit(ticketid, "MANAGER_APPROVE", "อนุมัติขั้นตอนสุดท้าย", "4", "5")
         return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ ข้อมูลสมบูรณ์"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -737,6 +787,48 @@ def dashboard_summary():
 # ─────────────────────────────────────────────
 # Serve frontend
 # ─────────────────────────────────────────────
+
+# -----------------------------------------
+# Bulk Approve (Manager)
+# -----------------------------------------
+@app.route("/api/tickets/bulk-approve", methods=["POST"])
+@login_required
+@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "BBTEC_MANAGER",
+    "Manager NOR1", "Manager NOR2", "BBTEC_MANAGER_NOR1", "BBTEC_MANAGER_NOR2")
+def bulk_approve():
+    data = request.json or {}
+    ticket_ids = data.get("ticket_ids", [])
+    if not ticket_ids:
+        return jsonify({"error": "ไม่มี ticket ที่เลือก"}), 400
+    try:
+        sheet = get_sheet("NOR_Penalty_Ticket")
+        headers = ensure_new_columns(sheet)
+        records = rows_to_dicts(sheet)
+        success_list = []
+        failed_list = []
+        for tid in ticket_ids:
+            ticket = next((r for r in records if str(r.get(COL_TICKETID)) == tid), None)
+            if not ticket:
+                failed_list.append(tid)
+                continue
+            if str(ticket.get(COL_STEP,"")).strip() != "4":
+                failed_list.append(tid)
+                continue
+            row_idx = find_row_index(sheet, tid)
+            if not row_idx:
+                failed_list.append(tid)
+                continue
+            fields = {COL_STEP:"5", COL_LOCKED:"TRUE",
+                      COL_LAST_UPDATED:now_str(), COL_UPDATED_BY:session.get("user"),
+                      COL_REVIEWER:session.get("name")}
+            update_ticket_fields(sheet, headers, row_idx, fields)
+            write_audit(tid, "BULK_APPROVE", "Manager Bulk Approve", "4", "5")
+            success_list.append(tid)
+        return jsonify({"success": True, "approved": len(success_list),
+                        "failed": len(failed_list)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
