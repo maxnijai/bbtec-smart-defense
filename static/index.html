@@ -482,6 +482,7 @@
           </div>
           <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-left:auto">
             <button class="btn-action" onclick="exportExcel()" title="Export Excel">📥 Excel</button>
+            <button class="btn-action" title="รีเฟรชข้อมูล" onclick="refreshTickets(this)" style="font-size:13px">🔄</button>
             <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID / Subject..." oninput="filterTickets()"/>
             <select class="filter-select" id="filter-province" onchange="filterTickets()">
               <option value="">ทุก Province</option>
@@ -500,6 +501,7 @@
               <option value="ปรับ">ปรับ</option>
               <option value="ไม่ปรับ">ไม่ปรับ</option>
             </select>
+            <button class="btn-action" id="btn-clear-filter" onclick="clearFilters()" style="display:none;color:var(--red);border-color:var(--red)" title="ปลด filter ทั้งหมด">✕ ปลด filter</button>
           </div>
         </div>
         <div id="tickets-loading" class="loading"><div class="spinner"></div> กำลังโหลด...</div>
@@ -1202,6 +1204,36 @@ function filterTickets(){
   const filtered = getFilteredTickets();
   renderTicketTable(filtered);
   renderTicketsKPI(filtered);
+  // Show/hide clear filter button
+  const hasFilter = ($('search-tickets')?.value||'') ||
+    ($('filter-province')?.value||'') ||
+    ($('filter-step')?.value||'') ||
+    ($('filter-result')?.value||'');
+  const btn = $('btn-clear-filter');
+  if(btn) btn.style.display = hasFilter ? 'inline-block' : 'none';
+}
+
+function clearFilters(){
+  if($('search-tickets')) $('search-tickets').value = '';
+  if($('filter-step')) $('filter-step').value = '';
+  if($('filter-result')) $('filter-result').value = '';
+  const userProvinces = (currentUser?.province||'').split(',').map(p=>p.trim()).filter(p=>p&&p.toUpperCase()!=='ALL');
+  if(userProvinces.length === 0 && $('filter-province')) $('filter-province').value = '';
+  filterTickets();
+  showToast('ปลด filter ทั้งหมดแล้ว ✓', 'success');
+}
+
+async function refreshTickets(btn){
+  if(btn){ btn.disabled = true; btn.textContent = '⏳'; }
+  Object.keys(_optimisticLocks).forEach(k => delete _optimisticLocks[k]);
+  try {
+    await loadTickets();
+    await loadDashboard();
+    showToast('รีเฟรชข้อมูลสำเร็จ ✓', 'success');
+  } catch(e){
+    showToast('รีเฟรชไม่สำเร็จ', 'error');
+  }
+  if(btn){ btn.disabled = false; btn.textContent = '🔄'; }
 }
 
 // ── Tickets Page Mini KPI ──
