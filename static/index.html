@@ -1687,8 +1687,11 @@ function openTicket(ticket){
     </div>
     ${formHTML}
     <div id="audit-timeline" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px">📋 ประวัติการดำเนินการ</div>
-      <div id="audit-list" style="font-size:11px;color:var(--muted)">กำลังโหลด...</div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px"
+           onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        📋 ประวัติการดำเนินการ <span style="font-size:10px">(คลิกเพื่อ ขยาย/ย่อ)</span>
+      </div>
+      <div id="audit-list" style="font-size:11px;color:var(--muted);display:none">กำลังโหลด...</div>
     </div>
   `;
   $('modal-overlay').classList.add('open');
@@ -1854,6 +1857,7 @@ async function loadAuditLog(ticketid){
   if(!el) return;
   try {
     const res = await fetch(`${API}/api/ticket/${ticketid}/audit`,{credentials:'include'});
+    if(!res.ok){ el.innerHTML = '<span style="color:var(--muted)">ยังไม่มีประวัติ</span>'; return; }
     const d = await res.json();
     if(!d.logs||!d.logs.length){
       el.innerHTML = '<span style="color:var(--muted)">ยังไม่มีประวัติ</span>'; return;
