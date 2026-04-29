@@ -552,7 +552,12 @@
           <img src="/system-flow.png" alt="BBTEC Smart Defense System Flow"
                style="max-width:100%;height:auto;border-radius:8px;cursor:zoom-in"
                onclick="window.open('/system-flow.png','_blank')"
+               onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='block'"
                title="คลิกเพื่อดูขนาดเต็ม"/>
+          <div style="display:none;padding:20px;color:var(--muted);text-align:center">
+            <div style="font-size:40px;margin-bottom:10px">🖼</div>
+            <div>ภาพไม่สามารถโหลดได้ — <a href="/system-flow.png" target="_blank" style="color:var(--accent2)">คลิกที่นี่เพื่อเปิดโดยตรง</a></div>
+          </div>
         </div>
         <div style="padding:12px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;border-top:1px solid var(--border)">
           <div style="background:var(--bg3);border-left:3px solid #f59e0b;border-radius:6px;padding:8px 10px">
