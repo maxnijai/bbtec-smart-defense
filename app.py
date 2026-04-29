@@ -1,59 +1,59 @@
-import os
-import json
-import hashlib
-import time
-import threading
+import os, json, hashlib, time, threading
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, session, send_from_directory
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
 import gspread
 from google.oauth2.service_account import Credentials
-
-# ─────────────────────────────────────────────
-# In-memory cache (TTL-based, thread-safe)
-# ─────────────────────────────────────────────
-_cache = {}
-_cache_lock = threading.Lock()
-CACHE_TTL = 60  # seconds
-
-def cache_get(key):
-    with _cache_lock:
-        entry = _cache.get(key)
-        if entry and (time.time() - entry["ts"]) < CACHE_TTL:
-            return entry["data"]
-        return None
-
-def cache_set(key, data):
-    with _cache_lock:
-        _cache[key] = {"data": data, "ts": time.time()}
-
-def cache_invalidate_prefix(prefix):
-    with _cache_lock:
-        for k in [k for k in list(_cache.keys()) if k.startswith(prefix)]:
-            _cache.pop(k, None)
-
-# ─────────────────────────────────────────────
-# Exponential backoff for all Sheets API calls
-# ─────────────────────────────────────────────
-def sheets_retry(fn, *args, max_retries=5, **kwargs):
-    delay = 2
-    for attempt in range(max_retries):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            err = str(e)
-            if ("429" in err or "503" in err or "quota" in err.lower()) and attempt < max_retries - 1:
-                time.sleep(delay + attempt * 1.5)
-                delay = min(delay * 2, 32)
-            else:
-                raise
-    raise RuntimeError("sheets_retry: max retries exceeded")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("SECRET_KEY", "bbtec-smart-defense-2026")
 
 # ─────────────────────────────────────────────
-# Google Sheets Setup (lazy init — no crash on boot)
+# PostgreSQL connection pool
+# ─────────────────────────────────────────────
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_db_pool = None
+
+def get_pool():
+    global _db_pool
+    if _db_pool is None:
+        _db_pool = pool.ThreadedConnectionPool(
+            minconn=1, maxconn=10,
+            dsn=DATABASE_URL,
+            cursor_factory=RealDictCursor
+        )
+    return _db_pool
+
+def get_conn():
+    return get_pool().getconn()
+
+def release_conn(conn):
+    get_pool().putconn(conn)
+
+def db_execute(sql, params=None, fetch="none"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+            if fetch == "one":
+                result = cur.fetchone()
+            elif fetch == "all":
+                result = cur.fetchall()
+            else:
+                result = None
+            conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        release_conn(conn)
+
+# ─────────────────────────────────────────────
+# Google Sheets (read-only — for sync + user auth)
 # ─────────────────────────────────────────────
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1RBWr-lKva_XOqmcKwEE-E7hqIodbWWK1XHzuV8QJ-7Q")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -65,127 +65,34 @@ def get_gc():
         return _gc_client
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
-        info = json.loads(creds_json)
-        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=SCOPES)
     elif os.path.exists("credentials.json"):
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     else:
-        raise RuntimeError("ไม่พบ GOOGLE_CREDENTIALS_JSON หรือ credentials.json")
+        raise RuntimeError("ไม่พบ credentials")
     _gc_client = gspread.authorize(creds)
     return _gc_client
 
-def get_sheet(sheet_name):
-    gc = get_gc()
-    return gc.open_by_key(SPREADSHEET_ID).worksheet(sheet_name)
+def get_sheet(name):
+    return get_gc().open_by_key(SPREADSHEET_ID).worksheet(name)
 
-# ─────────────────────────────────────────────
-# Column constants — NOR_Penalty_Ticket
-# ─────────────────────────────────────────────
-# Existing ticket columns (read-only from system)
-COL_TICKETID            = "TICKETID"
-COL_STATUS              = "STATUS"
-COL_SEVERITY            = "TRUESEVERITY_DESC"
-COL_URGENCY             = "TRUEURGENCY"
-COL_CREATIONDATE        = "CREATIONDATE"
-COL_TARGETFINISH        = "TARGETFINISH"
-COL_RESTORATIONDATE     = "RESTORATIONDATE"
-COL_SUBJECT             = "SUBJECT"
-COL_CATEGORIES          = "CATEGORIES"
-COL_OWNERGROUP          = "TRUEOWNERGROUP"
-COL_REGION              = "TrackB_Region"
-COL_DOWNTIME            = "DOWN_TIME_MINUTE"
-COL_TICKET_SLA          = "TICKET_SLA"
-COL_PROBLEM             = "PROBLEM"
-COL_SUB_CAUSE           = "SUB_CAUSE"
-COL_EXTERNALSYSTEM      = "EXTERNALSYSTEM"
-COL_EXTERNALSYSTEM_TID  = "EXTERNALSYSTEM_TICKETID"
-COL_TICKETING_SYSTEM    = "Ticketing_System"
-COL_ACTSTART            = "ACTSTART"
-COL_ACT_RESTORATION     = "ACT_RESTORATIONDATE"
-COL_ACTIVITY_HR         = "ACTIVITY_DURATION_HR"
-COL_ACTIVITY_MIN        = "ACTIVITY_DURATION_MIN"
-COL_ACTIVITY_SLA        = "ACTIVITY_SLA"
-COL_CONTRACT_GROUP      = "CONTRACTTICKET_TRACKB"
-COL_PENALTY_FLAG        = "PENALTY_FLAG"
-COL_PENALTYHOUR         = "PENALTYHOUR_TRACKB"
-COL_PENALTYRATE         = "PENALTYRATE_TRACKB"
-COL_PENALTYBAHT         = "PENALTYBAHT_TRACKB"
-
-# Step 1 — Engineer fills
-COL_OWNER               = "Owner"
-COL_OWNER1              = "owner1"          # Column AM — login user who submitted Step 1
-COL_GROUP_PROBLEM       = "Group problem"
-COL_SUB_PROBLEM         = "Sub Problem"
-COL_ACCIDENT            = "Accident"
-COL_OVERDUE_DETAIL      = "Overdue Detail แนบLINK รูป"   # Column AG — combined field
-COL_LINK_PHOTO          = "Overdue Detail แนบLINK รูป"   # same column, kept for compat
-COL_LINK_EVIDENCE       = "แนบ LINK ชี้แจง"
-
-# Step 2 — FSO fills
-COL_FSO_DECISION        = "FSO พิจารณา (ปรับ/ไม่ปรับ)"
-COL_FSO_APPROVE         = "FSO approve (ลงชื่อ FSO)"
-COL_FSO_DATE            = "วันที่ FSO อนุมัติ"
-COL_FSO_REMARK          = "Remark FSO"
-
-# Step 3 — Reviewer / Defend
-COL_REVIEWER            = "Reviewer"
-COL_DEFEND              = "BBTEC Defend\nไม่สมควรปรับ"  # actual Sheet column has newline
-COL_CHECK               = "Check"
-
-# ── New columns added by this system ──
-COL_STEP                = "STEP"
-COL_DEFEND_COUNT        = "DEFEND_COUNT"
-COL_LOCKED              = "LOCKED"
-COL_LAST_UPDATED        = "LAST_UPDATED"
-COL_UPDATED_BY          = "UPDATED_BY"
-COL_FINAL_RESULT        = "FINAL_RESULT"
-
-NEW_COLUMNS = [COL_STEP, COL_DEFEND_COUNT, COL_LOCKED, COL_LAST_UPDATED, COL_UPDATED_BY, COL_FINAL_RESULT, COL_OWNER1]
-
-# ─────────────────────────────────────────────
-# Role definitions
-# ─────────────────────────────────────────────
-ROLE_ENGINEER   = "Engineer"
-ROLE_SITE_SUP   = "Site Sup"
-ROLE_FSO        = "FSO"
-ROLE_FSO_MGR    = "FSO Manager"
-ROLE_REGIONAL   = "Regional"
-ROLE_MANAGER    = "Manager"
-
-# Accept all variants used in USER_ACCOUNT sheet
-STEP1_ROLES = [ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "engineer", "site_sup", "Engineer Zone"]
-STEP2_ROLES = [ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "fso", "FSO Manager Zone"]
-STEP5_ROLES = [ROLE_MANAGER, "MANAGER", "Manager NOR1", "Manager NOR2", "BBTEC Manager"]
-VIEW_ONLY_ROLES = [ROLE_REGIONAL, "REGIONAL", "Regional"]
-
-def is_step1_role(role):
-    r = str(role).strip().upper()
-    return r in [x.upper() for x in STEP1_ROLES]
-
-def is_step2_role(role):
-    r = str(role).strip().upper()
-    return r in [x.upper() for x in STEP2_ROLES]
-
-def is_step5_role(role):
-    r = str(role).strip().upper()
-    return r in [x.upper() for x in STEP5_ROLES]
-
-# ─────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────
-def hash_password(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-def now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def sheets_retry(fn, *args, max_retries=4, **kwargs):
+    delay = 2
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if ("429" in str(e) or "quota" in str(e).lower()) and attempt < max_retries - 1:
+                time.sleep(delay + attempt * 1.5)
+                delay = min(delay * 2, 30)
+            else:
+                raise
 
 def rows_to_dicts(sheet):
-    """Read sheet handling duplicate column names by renaming them."""
     all_values = sheets_retry(sheet.get_all_values)
     if not all_values:
         return []
     raw_headers = all_values[0]
-    # Deduplicate headers: TICKETID, TICKETID_2, TICKETID_3 ...
     seen = {}
     headers = []
     for h in raw_headers:
@@ -198,69 +105,165 @@ def rows_to_dicts(sheet):
             headers.append(h)
     records = []
     for row in all_values[1:]:
-        # Pad short rows
         padded = row + [""] * (len(headers) - len(row))
         records.append(dict(zip(headers, padded)))
     return records
 
-def find_row_index(sheet, ticketid):
-    """Return 1-based row index for a given TICKETID (header is row 1).
-    Uses the FIRST column named TICKETID to avoid duplicate-header issues."""
-    headers = sheets_retry(sheet.row_values, 1)
-    tid_col = 1
-    for i, h in enumerate(headers):
-        if str(h).strip() == COL_TICKETID:
-            tid_col = i + 1
-            break
-    col_values = sheets_retry(sheet.col_values, tid_col)
-    for i, val in enumerate(col_values):
-        if str(val).strip() == str(ticketid).strip() and i > 0:
-            return i + 1
-    return None
+# ─────────────────────────────────────────────
+# DB Schema bootstrap
+# ─────────────────────────────────────────────
+def init_db():
+    db_execute("""
+    CREATE TABLE IF NOT EXISTS tickets (
+        ticketid TEXT PRIMARY KEY,
+        data JSONB NOT NULL DEFAULT '{}',
+        step TEXT DEFAULT '',
+        defend_count INT DEFAULT 0,
+        locked BOOLEAN DEFAULT FALSE,
+        fso_decision TEXT DEFAULT '',
+        final_result TEXT DEFAULT '',
+        owner1 TEXT DEFAULT '',
+        updated_by TEXT DEFAULT '',
+        last_updated TIMESTAMPTZ DEFAULT NOW(),
+        synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tickets_step ON tickets(step);
+    CREATE INDEX IF NOT EXISTS idx_tickets_locked ON tickets(locked);
 
-def get_col_index(headers, col_name):
-    """Return 1-based column index from header list."""
-    if col_name in headers:
-        return headers.index(col_name) + 1
-    return None
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        ts TIMESTAMPTZ DEFAULT NOW(),
+        username TEXT, name TEXT, role TEXT,
+        ticketid TEXT, action TEXT, detail TEXT,
+        step_from TEXT, step_to TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_ticketid ON audit_log(ticketid);
 
-def ensure_new_columns(sheet):
-    """Add system columns if they don't exist yet.
-    Uses batch update to avoid exceeding grid limits."""
-    headers = sheets_retry(sheet.row_values, 1)
-    missing = [c for c in NEW_COLUMNS if c not in headers]
-    if not missing:
-        return headers
+    CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        name TEXT, role TEXT, "group" TEXT,
+        region TEXT, province TEXT,
+        pass_hash TEXT, active BOOLEAN DEFAULT TRUE,
+        synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    """)
+    print("✅ DB schema ready")
+
+# ─────────────────────────────────────────────
+# Sync: Sheets → DB  (run on startup + /api/sync)
+# ─────────────────────────────────────────────
+def sync_tickets_from_sheets():
+    """Pull all tickets from Sheets and upsert into DB."""
     try:
-        current_cols = sheet.col_count
-    except Exception:
-        current_cols = len(headers)
-    needed = len(headers) + len(missing)
-    if needed > current_cols:
-        sheets_retry(sheet.resize, cols=needed)
-    for col_name in missing:
-        next_col = len(headers) + 1
-        sheets_retry(sheet.update_cell, 1, next_col, col_name)
-        headers.append(col_name)
-    return headers
+        sheet = get_sheet("NOR_Penalty_Ticket")
+        records = rows_to_dicts(sheet)
+        if not records:
+            return 0
+        conn = get_conn()
+        count = 0
+        try:
+            with conn.cursor() as cur:
+                for r in records:
+                    tid = str(r.get("TICKETID", "")).strip()
+                    if not tid:
+                        continue
+                    # Check if row already exists — if so keep our step/defend/locked
+                    cur.execute("SELECT step, defend_count, locked, fso_decision, final_result, owner1, updated_by FROM tickets WHERE ticketid=%s", (tid,))
+                    existing = cur.fetchone()
+                    if existing:
+                        # Merge: keep DB's workflow fields, update sheet data
+                        cur.execute("""
+                            UPDATE tickets SET
+                                data = %s,
+                                synced_at = NOW()
+                            WHERE ticketid = %s
+                        """, (json.dumps(r), tid))
+                    else:
+                        cur.execute("""
+                            INSERT INTO tickets (ticketid, data, step, defend_count, locked,
+                                fso_decision, final_result, owner1, updated_by)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (ticketid) DO UPDATE SET data=EXCLUDED.data, synced_at=NOW()
+                        """, (
+                            tid, json.dumps(r),
+                            str(r.get("STEP","")).strip(),
+                            int(r.get("DEFEND_COUNT",0) or 0),
+                            str(r.get("LOCKED","")).upper() == "TRUE",
+                            str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip(),
+                            str(r.get("FINAL_RESULT","")).strip(),
+                            str(r.get("owner1","")).strip(),
+                            str(r.get("UPDATED_BY","")).strip(),
+                        ))
+                    count += 1
+            conn.commit()
+        finally:
+            release_conn(conn)
+        print(f"✅ Synced {count} tickets from Sheets")
+        return count
+    except Exception as e:
+        print(f"❌ Sync error: {e}")
+        return 0
 
-def update_ticket_fields(sheet, headers, row_idx, fields: dict):
-    """Update specific fields using batch_update — 1 API call instead of N calls."""
-    updates = []
-    for col_name, value in fields.items():
-        col_idx = get_col_index(headers, col_name)
-        if col_idx:
-            # Convert to A1 notation e.g. row 5 col 3 → C5
-            col_letter = col_idx_to_letter(col_idx)
-            updates.append({
-                "range": f"{col_letter}{row_idx}",
-                "values": [[value]]
-            })
-    if updates:
-        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
+def sync_users_from_sheets():
+    try:
+        sheet = get_sheet("USER_ACCOUNT")
+        users = rows_to_dicts(sheet)
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                for u in users:
+                    uname = str(u.get("User","")).strip()
+                    if not uname:
+                        continue
+                    raw_pass = str(u.get("Pass","")).strip()
+                    cur.execute("""
+                        INSERT INTO users (username, name, role, "group", region, province, pass_hash, active)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT (username) DO UPDATE SET
+                            name=EXCLUDED.name, role=EXCLUDED.role, "group"=EXCLUDED."group",
+                            region=EXCLUDED.region, province=EXCLUDED.province,
+                            pass_hash=EXCLUDED.pass_hash, active=EXCLUDED.active, synced_at=NOW()
+                    """, (
+                        uname,
+                        str(u.get("Name", uname)),
+                        str(u.get("Role","")).strip(),
+                        str(u.get("Group","")).strip(),
+                        str(u.get("Region","")).strip(),
+                        str(u.get("Province","")).strip(),
+                        raw_pass,
+                        str(u.get("Active","TRUE")).strip().upper() == "TRUE",
+                    ))
+            conn.commit()
+        finally:
+            release_conn(conn)
+        print(f"✅ Synced {len(users)} users")
+    except Exception as e:
+        print(f"❌ User sync error: {e}")
 
-def col_idx_to_letter(idx):
-    """Convert 1-based column index to A1 letter notation (supports AA, AB etc.)"""
+def write_back_to_sheets(ticketid, fields: dict):
+    """Write workflow fields back to Sheets async (best-effort)."""
+    def _write():
+        try:
+            sheet = get_sheet("NOR_Penalty_Ticket")
+            all_vals = sheets_retry(sheet.get_all_values)
+            if not all_vals: return
+            headers = all_vals[0]
+            for i, row in enumerate(all_vals[1:], start=2):
+                if len(row) > 0 and str(row[0]).strip() == str(ticketid).strip():
+                    updates = []
+                    for col_name, value in fields.items():
+                        if col_name in headers:
+                            col_idx = headers.index(col_name) + 1
+                            col_letter = _col_letter(col_idx)
+                            updates.append({"range": f"{col_letter}{i}", "values": [[value]]})
+                    if updates:
+                        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
+                    break
+        except Exception as e:
+            print(f"⚠️ write_back_to_sheets error: {e}")
+    threading.Thread(target=_write, daemon=True).start()
+
+def _col_letter(idx):
     result = ""
     while idx > 0:
         idx, rem = divmod(idx - 1, 26)
@@ -268,7 +271,43 @@ def col_idx_to_letter(idx):
     return result
 
 # ─────────────────────────────────────────────
-# Auth
+# Helpers
+# ─────────────────────────────────────────────
+def now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def hash_password(pw):
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+def ticket_to_dict(row):
+    """Merge DB workflow fields into Sheets data dict."""
+    if row is None:
+        return None
+    d = dict(row.get("data") or {})
+    d["TICKETID"]                      = row["ticketid"]
+    d["STEP"]                          = row["step"] or ""
+    d["DEFEND_COUNT"]                  = str(row["defend_count"] or 0)
+    d["LOCKED"]                        = "TRUE" if row["locked"] else ""
+    d["FSO พิจารณา (ปรับ/ไม่ปรับ)"]   = row["fso_decision"] or ""
+    d["FINAL_RESULT"]                  = row["final_result"] or ""
+    d["owner1"]                        = row["owner1"] or ""
+    d["UPDATED_BY"]                    = row["updated_by"] or ""
+    return d
+
+def log_audit(ticketid, action, detail="", step_from="", step_to=""):
+    try:
+        db_execute("""
+            INSERT INTO audit_log (username, name, role, ticketid, action, detail, step_from, step_to)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            session.get("user",""), session.get("name",""), session.get("role",""),
+            ticketid, action, str(detail)[:300], step_from, step_to
+        ))
+    except Exception:
+        pass
+
+# ─────────────────────────────────────────────
+# Auth decorators
 # ─────────────────────────────────────────────
 def login_required(f):
     @wraps(f)
@@ -282,67 +321,67 @@ def require_role(*roles):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            user_role = str(session.get("role","")).strip().upper()
-            allowed = [str(r).strip().upper() for r in roles]
-            if user_role not in allowed:
-                return jsonify({"error": f"Forbidden: role '{session.get('role')}' not in {roles}"}), 403
+            r = str(session.get("role","")).strip().upper()
+            if r not in [str(x).strip().upper() for x in roles]:
+                return jsonify({"error": f"Forbidden: role '{r}'"}), 403
             return f(*args, **kwargs)
         return decorated
     return decorator
 
+ROLE_ENGINEER = "ENGINEER_ZONE"
+ROLE_SITE_SUP = "SITE_SUPERVISOR"
+ROLE_FSO      = "FSO_ZONE"
+ROLE_FSO_MGR  = "FSO_MANAGER"
+ROLE_MANAGER  = "BBTEC_MANAGER"
+
+def is_manager(role):
+    r = str(role).upper().replace(" ","_")
+    return "MANAGER" in r
+
 # ─────────────────────────────────────────────
 # Routes — Auth
 # ─────────────────────────────────────────────
-# Audit helper (NOT a route — just a helper function)
-# ─────────────────────────────────────────────
-def log_audit_event(ticketid="", action="", detail="", step_from="", step_to=""):
-    try:
-        from flask import has_request_context
-        user = session.get("user","") if has_request_context() else ""
-        name = session.get("name","") if has_request_context() else ""
-        role = session.get("role","") if has_request_context() else ""
-        sheet = get_sheet("SD_AUDIT_LOG")
-        sheet.append_row([
-            now_str(), user, name, role,
-            str(ticketid), str(action), str(detail)[:200],
-            str(step_from), str(step_to),
-        ], value_input_option="USER_ENTERED")
-    except Exception:
-        pass
-
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
+    username = data.get("username","").strip()
+    password = data.get("password","").strip()
     if not username or not password:
         return jsonify({"error": "กรุณากรอก Username และ Password"}), 400
     try:
-        sheet = get_sheet("USER_ACCOUNT")
-        users = rows_to_dicts(sheet)
-        for u in users:
-            if str(u.get("User", "")).strip() == username:
-                if str(u.get("Active", "")).strip().upper() != "TRUE":
-                    return jsonify({"error": "บัญชีนี้ถูกระงับการใช้งาน"}), 403
-                stored_pass = str(u.get("Pass", "")).strip()
-                # Support both plain text (legacy) and hashed passwords
-                if stored_pass == password or stored_pass == hash_password(password):
-                    session["user"]     = username
-                    session["name"]     = str(u.get("Name", username))
-                    session["role"]     = str(u.get("Role", "")).strip()
-                    session["group"]    = str(u.get("Group", "")).strip()
-                    session["region"]   = str(u.get("Region", "")).strip()
-                    session["province"] = str(u.get("Province", "")).strip()
-                    return jsonify({
-                        "success": True,
-                        "user": session["name"],
-                        "role": session["role"],
-                        "region": session["region"],
-                        "province": session["province"],
-                    })
-        return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
+        u = db_execute("SELECT * FROM users WHERE username=%s AND active=TRUE", (username,), fetch="one")
+        if not u:
+            # Fallback to Sheets if user not in DB yet
+            sheet = get_sheet("USER_ACCOUNT")
+            users = rows_to_dicts(sheet)
+            u_sheet = next((x for x in users if str(x.get("User","")).strip() == username), None)
+            if not u_sheet:
+                return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
+            if str(u_sheet.get("Active","")).upper() != "TRUE":
+                return jsonify({"error": "บัญชีนี้ถูกระงับ"}), 403
+            stored = str(u_sheet.get("Pass","")).strip()
+            if stored != password and stored != hash_password(password):
+                return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
+            session.update({
+                "user": username, "name": str(u_sheet.get("Name", username)),
+                "role": str(u_sheet.get("Role","")).strip(),
+                "group": str(u_sheet.get("Group","")).strip(),
+                "region": str(u_sheet.get("Region","")).strip(),
+                "province": str(u_sheet.get("Province","")).strip(),
+            })
+        else:
+            stored = str(u["pass_hash"]).strip()
+            if stored != password and stored != hash_password(password):
+                return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
+            session.update({
+                "user": username, "name": u["name"] or username,
+                "role": u["role"] or "", "group": u["group"] or "",
+                "region": u["region"] or "", "province": u["province"] or "",
+            })
+        return jsonify({"success": True, "user": session["name"], "role": session["role"],
+                        "region": session["region"], "province": session["province"]})
     except Exception as e:
-        return jsonify({"error": f"ไม่สามารถเชื่อมต่อ Google Sheet: {str(e)}"}), 500
+        return jsonify({"error": f"เชื่อมต่อไม่ได้: {e}"}), 500
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
@@ -352,111 +391,32 @@ def logout():
 @app.route("/api/me")
 @login_required
 def me():
-    return jsonify({
-        "user":     session.get("user"),
-        "name":     session.get("name"),
-        "role":     session.get("role"),
-        "group":    session.get("group"),
-        "region":   session.get("region"),
-        "province": session.get("province"),
-    })
+    return jsonify({k: session.get(k) for k in ["user","name","role","group","region","province"]})
 
 # ─────────────────────────────────────────────
-# Routes — Tickets
+# Routes — Tickets (DB)
 # ─────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────
-# Audit Routes
-# ─────────────────────────────────────────────
-@app.route("/api/ticket/<ticketid>/audit")
-@login_required
-def get_audit_log(ticketid):
-    try:
-        try:
-            sheet = get_sheet("SD_AUDIT_LOG")
-        except Exception:
-            return jsonify({"logs": []})  # Sheet not created yet
-        rows = sheet.get_all_values()
-        if not rows or len(rows) < 2:
-            return jsonify({"logs": []})
-        logs = []
-        for r in rows[1:]:
-            if len(r) >= 5 and str(r[4]).strip() == str(ticketid).strip():
-                logs.append({
-                    "timestamp": r[0] if len(r)>0 else "",
-                    "user":      r[1] if len(r)>1 else "",
-                    "name":      r[2] if len(r)>2 else "",
-                    "role":      r[3] if len(r)>3 else "",
-                    "action":    r[5] if len(r)>5 else "",
-                    "detail":    r[6] if len(r)>6 else "",
-                    "step_from": r[7] if len(r)>7 else "",
-                    "step_to":   r[8] if len(r)>8 else "",
-                })
-        logs.reverse()
-        return jsonify({"logs": logs})
-    except Exception as e:
-        return jsonify({"logs": [], "error": str(e)})
-
-@app.route("/api/audit/init")
-@login_required
-def init_audit_sheet():
-    try:
-        gc = get_gc()
-        wb = gc.open_by_key(SPREADSHEET_ID)
-        try:
-            wb.worksheet("SD_AUDIT_LOG")
-        except Exception:
-            ws = wb.add_worksheet("SD_AUDIT_LOG", rows=5000, cols=9)
-            ws.append_row(["TIMESTAMP","USER","NAME","ROLE","TICKETID","ACTION","DETAIL","STEP_FROM","STEP_TO"])
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
 @app.route("/api/tickets")
 @login_required
 def get_tickets():
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        ensure_new_columns(sheet)
+        province = session.get("province","")
+        region   = session.get("region","")
+        allowed  = [p.strip() for p in province.split(",") if p.strip() and p.upper() != "ALL"] if province and province.upper() not in ("ALL","") else []
 
-        # ── Cache raw records (shared across all users, 60s TTL) ──
-        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
-        records = cache_get(CACHE_KEY)
-        if records is None:
-            records = rows_to_dicts(sheet)
-            cache_set(CACHE_KEY, records)
-
-        role     = session.get("role")
-        region   = session.get("region")
-        province = session.get("province")
-
-        # Province filter: comma-separated list in session["province"]
-        # e.g. "TRUE-TH-BBT-NOR1-LPG-NOP,TRUE-TH-BBT-NOR1-NAN-NOP"
-        # Matches against TRUEOWNERGROUP column in ticket
-        allowed_provinces = []
-        if province and province.upper() not in ("ALL", ""):
-            allowed_provinces = [p.strip() for p in province.split(",") if p.strip() and p.strip().upper() != "ALL"]
-
-        filtered = []
-        for r in records:
-            if not r.get(COL_TICKETID):
-                continue
-            # Province filter (Engineer/FSO with specific provinces assigned)
-            if allowed_provinces:
-                ticket_owner = str(r.get("TRUEOWNERGROUP", "")).strip()
-                if ticket_owner not in allowed_provinces:
+        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
+        tickets = []
+        for row in (rows or []):
+            t = ticket_to_dict(row)
+            if allowed:
+                if str(t.get("TRUEOWNERGROUP","")).strip() not in allowed:
                     continue
-            elif region and region.upper() not in ("ALL", ""):
-                # Region filter for managers/regional with no specific province
-                row_region = str(r.get(COL_REGION, "")).strip()
-                region_upper = region.upper()
-                if row_region and region_upper not in row_region.upper() and row_region.upper() not in region_upper:
-                    if not any(x in row_region.upper() for x in ["NORTH","NOR1","NOR2","NOR"]):
-                        continue
-            filtered.append(r)
-
-        return jsonify({"tickets": filtered, "total": len(filtered)})
+            elif region and region.upper() not in ("ALL",""):
+                rr = str(t.get("TrackB_Region","")).upper()
+                if rr and region.upper() not in rr and not any(x in rr for x in ["NOR1","NOR2","NOR"]):
+                    continue
+            tickets.append(t)
+        return jsonify({"tickets": tickets, "total": len(tickets)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -464,31 +424,15 @@ def get_tickets():
 @login_required
 def get_ticket(ticketid):
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        # Reuse cached records if available
-        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
-        records = cache_get(CACHE_KEY)
-        if records is None:
-            records = rows_to_dicts(sheet)
-            cache_set(CACHE_KEY, records)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
-        if not ticket:
+        row = db_execute("SELECT * FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row:
             return jsonify({"error": "ไม่พบ Ticket"}), 404
-        # Add normalized defend_reason — column name has actual newline in Sheet
-        defend_reason = str(ticket.get(COL_DEFEND, "") or "")
-        if not defend_reason:
-            # Fallback: scan all keys
-            for k, v in ticket.items():
-                if "Defend" in str(k) and ("สมควร" in str(k) or "BBTEC" in str(k)) and v:
-                    defend_reason = str(v)
-                    break
-        ticket["_defend_reason"] = defend_reason
-        return jsonify(ticket)
+        return jsonify(ticket_to_dict(row))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Step 1 — Engineer Review
+# Step 1 — Engineer
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/step1", methods=["POST"])
 @login_required
@@ -496,457 +440,363 @@ def get_ticket(ticketid):
 def submit_step1(ticketid):
     data = request.json or {}
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
+        row = db_execute("SELECT locked, step FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row:
             return jsonify({"error": "ไม่พบ Ticket"}), 404
+        if row["locked"]:
+            return jsonify({"error": "Ticket นี้ถูก Lock แล้ว"}), 403
+        if str(row["step"] or "").strip() not in ("","0","1"):
+            return jsonify({"error": f"Ticket อยู่ที่ Step {row['step']} แล้ว"}), 403
 
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
+        overdue = data.get("overdue_detail","")
+        if data.get("link_photo",""):
+            overdue = f"{overdue} / {data['link_photo']}" if overdue else data["link_photo"]
 
-        # Block if locked
-        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
-            return jsonify({"error": "Ticket นี้ถูก Lock แล้ว ไม่สามารถแก้ไขได้"}), 403
-
-        current_step = str(ticket.get(COL_STEP, "")).strip()
-        if current_step not in ("", "0", "1"):
-            return jsonify({"error": f"Ticket อยู่ที่ Step {current_step} แล้ว ไม่สามารถแก้ไข Step 1"}), 403
-
-        # AG column = "Overdue Detail แนบLINK รูป" — combine overdue text + photo link
-        overdue_text = data.get("overdue_detail", "")
-        link_photo   = data.get("link_photo", "")
-        overdue_combined = overdue_text
-        if link_photo:
-            overdue_combined = f"{overdue_text} / {link_photo}" if overdue_text else link_photo
-
-        fields = {
-            COL_OWNER1:         session.get("user"),   # login username → column AW
-            COL_GROUP_PROBLEM:  data.get("group_problem", ""),
-            COL_SUB_PROBLEM:    data.get("sub_problem", ""),
-            COL_ACCIDENT:       data.get("accident", ""),
-            COL_OVERDUE_DETAIL: overdue_combined,
-            COL_LINK_EVIDENCE:  data.get("link_evidence", ""),
-            COL_STEP:           "1",
-            COL_LAST_UPDATED:   now_str(),
-            COL_UPDATED_BY:     session.get("user"),
-        }
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        log_audit_event(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')} Sub:{data.get('sub_problem','')}", "", "1")
-        cache_invalidate_prefix("tickets:")
-        return jsonify({"success": True, "message": "บันทึก Step 1 สำเร็จ ยืนยันแล้วไม่สามารถแก้ไขได้"})
+        db_execute("""
+            UPDATE tickets SET
+                step='1', owner1=%s, updated_by=%s, last_updated=NOW(),
+                data = data ||
+                    jsonb_build_object(
+                        'Group problem', %s::text,
+                        'Sub Problem',   %s::text,
+                        'Accident',      %s::text,
+                        'Overdue Detail แนบLINK รูป', %s::text,
+                        'แนบ LINK ชี้แจง', %s::text,
+                        'STEP', '1',
+                        'UPDATED_BY', %s::text,
+                        'owner1', %s::text
+                    )
+            WHERE ticketid=%s
+        """, (
+            session.get("user"), session.get("user"),
+            data.get("group_problem",""), data.get("sub_problem",""),
+            data.get("accident",""), overdue, data.get("link_evidence",""),
+            session.get("user"), session.get("user"),
+            ticketid
+        ))
+        log_audit(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')}", "", "1")
+        # Write-back to Sheets async
+        write_back_to_sheets(ticketid, {
+            "owner1": session.get("user",""),
+            "STEP": "1", "UPDATED_BY": session.get("user",""),
+            "Group problem": data.get("group_problem",""),
+            "Sub Problem": data.get("sub_problem",""),
+            "Overdue Detail แนบLINK รูป": overdue,
+            "แนบ LINK ชี้แจง": data.get("link_evidence",""),
+        })
+        return jsonify({"success": True, "message": "บันทึก Step 1 สำเร็จ"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Step 2 — FSO Review
+# Step 2 — FSO
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/step2", methods=["POST"])
 @login_required
 @require_role(ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "FSO Manager Zone")
 def submit_step2(ticketid):
     data = request.json or {}
-    decision = data.get("fso_decision", "").strip()  # "ปรับ" or "ไม่ปรับ"
-    if decision not in ("ปรับ", "ไม่ปรับ"):
-        return jsonify({"error": "กรุณาเลือก: ปรับ หรือ ไม่ปรับ"}), 400
+    decision = data.get("fso_decision","").strip()
+    if decision not in ("ปรับ","ไม่ปรับ"):
+        return jsonify({"error": "กรุณาเลือก ปรับ หรือ ไม่ปรับ"}), 400
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
-            return jsonify({"error": "ไม่พบ Ticket"}), 404
+        row = db_execute("SELECT locked, step FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
+        if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
+        if str(row["step"] or "").strip() not in ("1","2"):
+            return jsonify({"error": f"Ticket ยังไม่ผ่าน Step 1"}), 403
 
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
+        new_step = "4" if decision == "ไม่ปรับ" else "2"
+        final    = "ไม่ปรับ" if decision == "ไม่ปรับ" else ""
+        locked   = decision == "ไม่ปรับ"
 
-        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
-            return jsonify({"error": "Ticket นี้ถูก Lock แล้ว"}), 403
-
-        current_step = str(ticket.get(COL_STEP, "")).strip()
-        if current_step not in ("1", "2"):
-            return jsonify({"error": f"Ticket ยังไม่ผ่าน Step 1 หรืออยู่ที่ Step {current_step}"}), 403
-
-        fields = {
-            COL_FSO_DECISION: decision,
-            COL_FSO_APPROVE:  session.get("name"),
-            COL_FSO_DATE:     now_str(),
-            COL_FSO_REMARK:   data.get("remark", ""),
-            COL_STEP:         "2",
-            COL_LAST_UPDATED: now_str(),
-            COL_UPDATED_BY:   session.get("user"),
-        }
-        # If FSO says ไม่ปรับ → skip to Step 4, lock
-        if decision == "ไม่ปรับ":
-            fields[COL_STEP]         = "4"
-            fields[COL_FINAL_RESULT] = "ไม่ปรับ"
-            fields[COL_LOCKED]       = "TRUE"
-
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        log_audit_event(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", "4" if decision=="ไม่ปรับ" else "2")
-        msg = "FSO ตัดสิน: ไม่ปรับ — Lock และส่ง Step 4 แล้ว" if decision == "ไม่ปรับ" else "FSO ตัดสิน: ปรับ — Engineer สามารถขอ Defend ได้"
-        cache_invalidate_prefix("tickets:")
+        db_execute("""
+            UPDATE tickets SET
+                step=%s, fso_decision=%s, final_result=%s, locked=%s,
+                updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object(
+                    'FSO พิจารณา (ปรับ/ไม่ปรับ)', %s::text,
+                    'FSO approve (ลงชื่อ FSO)', %s::text,
+                    'วันที่ FSO อนุมัติ', %s::text,
+                    'Remark FSO', %s::text,
+                    'STEP', %s::text,
+                    'FINAL_RESULT', %s::text,
+                    'UPDATED_BY', %s::text
+                )
+            WHERE ticketid=%s
+        """, (
+            new_step, decision, final, locked, session.get("user"),
+            decision, session.get("name"), now_str(), data.get("remark",""),
+            new_step, final, session.get("user"),
+            ticketid
+        ))
+        log_audit(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", new_step)
+        write_back_to_sheets(ticketid, {
+            "FSO พิจารณา (ปรับ/ไม่ปรับ)": decision,
+            "FSO approve (ลงชื่อ FSO)": session.get("name",""),
+            "Remark FSO": data.get("remark",""),
+            "STEP": new_step, "FINAL_RESULT": final,
+            "LOCKED": "TRUE" if locked else "",
+        })
+        msg = "FSO ตัดสิน: ไม่ปรับ — Lock แล้ว" if decision=="ไม่ปรับ" else "FSO ตัดสิน: ปรับ — Engineer สามารถขอ Defend ได้"
         return jsonify({"success": True, "message": msg, "fso_decision": decision})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Step 3 — Request Defend (Engineer)
+# Step 3 — Defend Request (Engineer)
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/defend/request", methods=["POST"])
 @login_required
 @require_role(ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "Engineer Zone")
 def request_defend(ticketid):
     data = request.json or {}
-    defend_reason = data.get("defend_reason", "").strip()
-    if not defend_reason:
-        return jsonify({"error": "กรุณากรอกเหตุผลการขอ Defend"}), 400
+    reason = data.get("defend_reason","").strip()
+    if not reason: return jsonify({"error": "กรุณากรอกเหตุผล"}), 400
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
-            return jsonify({"error": "ไม่พบ Ticket"}), 404
+        row = db_execute("SELECT locked, step, defend_count, fso_decision FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
+        if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
+        if str(row["step"] or "") not in ("2","3"): return jsonify({"error":"ยังไม่ถึง Step Defend"}), 403
+        if str(row["fso_decision"] or "") == "ไม่ปรับ": return jsonify({"error":"FSO ตัดสิน ไม่ปรับ แล้ว"}), 403
+        dc = int(row["defend_count"] or 0)
+        if dc >= 2: return jsonify({"error":"หมดสิทธิ์ Defend (สูงสุด 2 ครั้ง)"}), 403
 
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
-
-        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
-            return jsonify({"error": "Ticket นี้ถูก Lock แล้ว"}), 403
-
-        current_step = str(ticket.get(COL_STEP, "")).strip()
-        fso_decision = (
-            str(ticket.get(COL_FSO_DECISION, "") or "").strip() or
-            str(ticket.get("FSO พิจารณา", "") or "").strip()
-        )
-        # step=2 = FSO พิจารณาแล้ว (ปรับ) — allow defend
-        # step=3 = กำลัง defend อยู่ — allow re-defend
-        if current_step not in ("2", "3"):
-            return jsonify({"error": f"ยังไม่ถึง Step Defend (step={current_step})"}), 403
-        # ถ้า FSO ตัดสิน ไม่ปรับ ชัดเจน — ห้าม defend
-        if fso_decision == "ไม่ปรับ":
-            return jsonify({"error": "FSO ตัดสิน ไม่ปรับ แล้ว ไม่จำเป็นต้อง Defend"}), 403
-
-        try:
-            defend_count = int(ticket.get(COL_DEFEND_COUNT, 0) or 0)
-        except (ValueError, TypeError):
-            defend_count = 0
-
-        if defend_count >= 2:
-            return jsonify({"error": "หมดสิทธิ์ Defend แล้ว (สูงสุด 2 ครั้ง)"}), 403
-
-        fields = {
-            COL_DEFEND:       defend_reason,
-            COL_DEFEND_COUNT: str(defend_count + 1),
-            COL_STEP:         "3",
-            COL_LAST_UPDATED: now_str(),
-            COL_UPDATED_BY:   session.get("user"),
-        }
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        log_audit_event(ticketid, "DEFEND_REQUEST", f"ครั้งที่:{defend_count+1} เหตุผล:{defend_reason[:80]}", "2", "3")
-        return jsonify({
-            "success": True,
-            "message": f"ส่งคำขอ Defend ครั้งที่ {defend_count + 1} สำเร็จ",
-            "defend_count": defend_count + 1,
-            "remaining": 2 - (defend_count + 1),
+        col_defend = "BBTEC Defend\nไม่สมควรปรับ"
+        db_execute("""
+            UPDATE tickets SET step='3', defend_count=%s, updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object(
+                    %s, %s::text, 'STEP','3','DEFEND_COUNT',%s::text,'UPDATED_BY',%s::text
+                )
+            WHERE ticketid=%s
+        """, (dc+1, session.get("user"), col_defend, reason, str(dc+1), session.get("user"), ticketid))
+        log_audit(ticketid, "DEFEND_REQUEST", f"ครั้ง:{dc+1}", "2", "3")
+        write_back_to_sheets(ticketid, {
+            col_defend: reason,
+            "STEP": "3", "DEFEND_COUNT": str(dc+1), "UPDATED_BY": session.get("user",""),
         })
+        return jsonify({"success": True, "message": f"ส่งคำขอ Defend ครั้งที่ {dc+1}", "defend_count": dc+1})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Step 3 — FSO Re-review Defend
+# Step 3 — Defend Review (FSO)
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/defend/review", methods=["POST"])
 @login_required
 @require_role(ROLE_FSO, ROLE_FSO_MGR, "FSO_ZONE", "FSO Zone", "FSO Manager Zone")
 def review_defend(ticketid):
     data = request.json or {}
-    decision = data.get("decision", "").strip()  # "ปรับ" or "ไม่ปรับ"
-    if decision not in ("ปรับ", "ไม่ปรับ"):
-        return jsonify({"error": "กรุณาเลือก: ปรับ หรือ ไม่ปรับ"}), 400
+    decision = data.get("decision","").strip()
+    if decision not in ("ปรับ","ไม่ปรับ"): return jsonify({"error":"กรุณาเลือกผล"}), 400
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
-            return jsonify({"error": "ไม่พบ Ticket"}), 404
-
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
-
-        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
-            return jsonify({"error": "Ticket นี้ถูก Lock แล้ว"}), 403
-
-        try:
-            defend_count = int(ticket.get(COL_DEFEND_COUNT, 0) or 0)
-        except (ValueError, TypeError):
-            defend_count = 0
-
-        fields = {
-            COL_FSO_DECISION: decision,
-            COL_FSO_APPROVE:  session.get("name"),
-            COL_FSO_DATE:     now_str(),
-            COL_FSO_REMARK:   data.get("remark", ""),
-            COL_LAST_UPDATED: now_str(),
-            COL_UPDATED_BY:   session.get("user"),
-        }
+        row = db_execute("SELECT locked, defend_count FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
+        if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
+        dc = int(row["defend_count"] or 0)
 
         if decision == "ไม่ปรับ":
-            # Defend สำเร็จ → Step 4 ไม่ปรับ Lock
-            fields[COL_STEP]         = "4"
-            fields[COL_FINAL_RESULT] = "ไม่ปรับ"
-            fields[COL_LOCKED]       = "TRUE"
-            msg = "Defend สำเร็จ — ไม่ปรับ ข้อมูล Lock แล้ว"
-        elif defend_count >= 2:
-            # ครบ 2 ครั้ง ยังปรับ → Step 4 ปรับ Lock
-            fields[COL_STEP]         = "4"
-            fields[COL_FINAL_RESULT] = "ปรับ"
-            fields[COL_LOCKED]       = "TRUE"
-            msg = "Defend ครบ 2 ครั้ง — ยืนยัน ปรับ ข้อมูล Lock แล้ว"
+            new_step, final, locked, msg = "4","ไม่ปรับ",True,"Defend สำเร็จ — ไม่ปรับ Lock แล้ว"
+        elif dc >= 2:
+            new_step, final, locked, msg = "4","ปรับ",True,"Defend ครบ 2 ครั้ง — ยืนยัน ปรับ Lock แล้ว"
         else:
-            # FSO reject defend ครั้งนี้ → set step กลับเป็น 2 เพื่อให้ Engineer เห็นปุ่ม Defend ครั้งถัดไป
-            fields[COL_STEP] = "2"
-            msg = f"FSO ยังตัดสิน ปรับ — Engineer สามารถขอ Defend ครั้งที่ {defend_count + 1} ได้ (เหลือ {2 - defend_count} ครั้ง)"
+            new_step, final, locked = "2","",False
+            msg = f"FSO ยังตัดสิน ปรับ — Engineer ขอ Defend ครั้งที่ {dc+1} ได้"
 
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        cache_invalidate_prefix("tickets:")
-        return jsonify({"success": True, "message": msg, "decision": decision, "defend_count": defend_count})
+        db_execute("""
+            UPDATE tickets SET step=%s, fso_decision=%s, final_result=%s, locked=%s,
+                updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object(
+                    'FSO พิจารณา (ปรับ/ไม่ปรับ)',%s::text,
+                    'FSO approve (ลงชื่อ FSO)',%s::text,
+                    'Remark FSO',%s::text,
+                    'STEP',%s::text,'FINAL_RESULT',%s::text,
+                    'LOCKED',%s::text,'UPDATED_BY',%s::text
+                )
+            WHERE ticketid=%s
+        """, (
+            new_step, decision, final, locked, session.get("user"),
+            decision, session.get("name"), data.get("remark",""),
+            new_step, final, "TRUE" if locked else "", session.get("user"),
+            ticketid
+        ))
+        log_audit(ticketid, "DEFEND_REVIEW", f"ผล:{decision}", "3", new_step)
+        write_back_to_sheets(ticketid, {
+            "FSO พิจารณา (ปรับ/ไม่ปรับ)": decision,
+            "Remark FSO": data.get("remark",""),
+            "STEP": new_step, "FINAL_RESULT": final,
+            "LOCKED": "TRUE" if locked else "",
+        })
+        return jsonify({"success": True, "message": msg, "decision": decision, "defend_count": dc})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Accept Penalty (Engineer ยอมรับค่าปรับ — skip defend)
+# Accept Penalty
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/accept", methods=["POST"])
 @login_required
-@require_role(ROLE_ENGINEER, ROLE_SITE_SUP, "ENGINEER_ZONE", "Engineer Zone")
 def accept_penalty(ticketid):
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
-            return jsonify({"error": "ไม่พบ Ticket"}), 404
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
-        if str(ticket.get(COL_LOCKED, "")).upper() == "TRUE":
-            return jsonify({"error": "Ticket ถูก Lock แล้ว"}), 403
-        fields = {
-            COL_STEP:         "4",
-            COL_FINAL_RESULT: "ปรับ",
-            COL_LOCKED:       "TRUE",
-            COL_LAST_UPDATED: now_str(),
-            COL_UPDATED_BY:   session.get("user"),
-        }
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        log_audit_event(ticketid, "ACCEPT_PENALTY", "Engineer ยอมรับค่าปรับ", "2", "4")
-        cache_invalidate_prefix("tickets:")
-        return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว — ส่ง Step 4 รอ Manager Approve"})
+        db_execute("""
+            UPDATE tickets SET step='4', final_result='ปรับ', locked=TRUE,
+                updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object('STEP','4','FINAL_RESULT','ปรับ','LOCKED','TRUE','UPDATED_BY',%s::text)
+            WHERE ticketid=%s AND NOT locked
+        """, (session.get("user"), session.get("user"), ticketid))
+        log_audit(ticketid, "ACCEPT_PENALTY","ยอมรับค่าปรับ","2","4")
+        write_back_to_sheets(ticketid, {"STEP":"4","FINAL_RESULT":"ปรับ","LOCKED":"TRUE"})
+        return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Step 5 — Manager Approve
+# Manager Approve
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/approve", methods=["POST"])
 @login_required
-@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "BBTEC_MANAGER", "Manager NOR1", "Manager NOR2", "BBTEC_MANAGER_NOR1", "BBTEC_MANAGER_NOR2", "BBTEC MANAGER NOR1", "BBTEC MANAGER NOR2")
 def manager_approve(ticketid):
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        row_idx = find_row_index(sheet, ticketid)
-        if not row_idx:
-            return jsonify({"error": "ไม่พบ Ticket"}), 404
+        row = db_execute("SELECT step, final_result FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
+        if str(row["step"] or "") != "4":
+            return jsonify({"error":"Ticket ยังไม่อยู่ที่ Step 4"}), 403
 
-        records = rows_to_dicts(sheet)
-        ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
-
-        current_step = str(ticket.get(COL_STEP, "")).strip()
-        if current_step != "4":
-            return jsonify({"error": f"Ticket อยู่ที่ Step {current_step} ยังไม่ถึง Step 5"}), 403
-
-        fields = {
-            COL_STEP:         "5",
-            COL_LOCKED:       "TRUE",
-            COL_LAST_UPDATED: now_str(),
-            COL_UPDATED_BY:   session.get("user"),
-            COL_REVIEWER:     session.get("name"),
-        }
-        update_ticket_fields(sheet, headers, row_idx, fields)
-        log_audit_event(ticketid, "MANAGER_APPROVE", "อนุมัติขั้นตอนสุดท้าย", "4", "5")
-        cache_invalidate_prefix("tickets:")
-        return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ ข้อมูลสมบูรณ์"})
+        db_execute("""
+            UPDATE tickets SET step='5', updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object('STEP','5','UPDATED_BY',%s::text,'Reviewer',%s::text)
+            WHERE ticketid=%s
+        """, (session.get("user"), session.get("user"), session.get("name"), ticketid))
+        log_audit(ticketid,"MANAGER_APPROVE","อนุมัติ","4","5")
+        write_back_to_sheets(ticketid,{"STEP":"5","Reviewer":session.get("name","")})
+        return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Dashboard KPI Summary
+# Bulk Approve
+# ─────────────────────────────────────────────
+@app.route("/api/tickets/bulk-approve", methods=["POST"])
+@login_required
+def bulk_approve():
+    data = request.json or {}
+    ids = data.get("ticket_ids", [])
+    if not ids: return jsonify({"error":"ไม่มี ticket ที่เลือก"}), 400
+    ok, fail = [], []
+    for tid in ids:
+        try:
+            row = db_execute("SELECT step FROM tickets WHERE ticketid=%s", (tid,), fetch="one")
+            if row and str(row["step"] or "") == "4":
+                db_execute("""
+                    UPDATE tickets SET step='5', updated_by=%s, last_updated=NOW(),
+                        data=data||jsonb_build_object('STEP','5','UPDATED_BY',%s::text,'Reviewer',%s::text)
+                    WHERE ticketid=%s
+                """, (session.get("user"), session.get("user"), session.get("name"), tid))
+                write_back_to_sheets(tid,{"STEP":"5","Reviewer":session.get("name","")})
+                ok.append(tid)
+            else:
+                fail.append(tid)
+        except Exception:
+            fail.append(tid)
+    return jsonify({"success": True, "approved": len(ok), "failed": len(fail)})
+
+# ─────────────────────────────────────────────
+# Dashboard Summary (from DB — fast!)
 # ─────────────────────────────────────────────
 @app.route("/api/dashboard/summary")
 @login_required
 def dashboard_summary():
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        # Reuse cached records (shared with get_tickets, 60s TTL)
-        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
-        records = cache_get(CACHE_KEY)
-        if records is None:
-            records = rows_to_dicts(sheet)
-            cache_set(CACHE_KEY, records)
-        # Dashboard shows ALL data regardless of user province — no filter here
-        # (province filter only applies to Ticket page)
+        rows = db_execute("SELECT step, defend_count, locked, fso_decision, final_result, data FROM tickets", fetch="all")
+        total=reviewed=fso_penalty=fso_no_penalty=0
+        defend_req=defend_round2=0
+        final_penalty=final_no_penalty=approved=0
+        total_baht=final_baht=0
 
-        total = reviewed = fso_penalty = fso_no_penalty = 0
-        defend_req = defend_success = defend_round2 = 0
-        final_penalty = final_no_penalty = 0
-        approved = pending_approve = 0
-        total_penalty_baht = final_penalty_baht = 0
-
-        for r in records:
-            if not r.get(COL_TICKETID):
-                continue
+        for row in (rows or []):
             total += 1
             try:
-                total_penalty_baht += float(str(r.get(COL_PENALTYBAHT, "0") or 0).replace(",", ""))
-            except Exception:
-                pass
-
-            step = str(r.get(COL_STEP, "")).strip()
-            if step in ("1", "2", "3", "4", "5"):
-                reviewed += 1
-
-            # FSO decision: try multiple column variants (column name may vary)
-            fso_dec = (
-                str(r.get(COL_FSO_DECISION, "") or "").strip() or
-                str(r.get("FSO พิจารณา", "") or "").strip()
-            )
-            # Also infer from STEP: step>=2 means FSO reviewed = ปรับ (unless final=ไม่ปรับ from FSO direct)
-            final = str(r.get(COL_FINAL_RESULT, "")).strip()
-            if fso_dec == "ปรับ":
-                fso_penalty += 1
-            elif fso_dec == "ไม่ปรับ":
-                fso_no_penalty += 1
-            elif step in ("2", "3", "4", "5"):
-                # FSO column empty but step advanced — infer from final result or step
-                if final == "ไม่ปรับ":
-                    fso_no_penalty += 1
-                else:
-                    fso_penalty += 1  # Step 2+ without ไม่ปรับ = ปรับ
-
-            try:
-                dc = int(r.get(COL_DEFEND_COUNT, 0) or 0)
-            except Exception:
-                dc = 0
-            if dc > 0:
-                defend_req += 1
-            if dc >= 2:
-                defend_round2 += 1
-
-            if final == "ปรับ":
-                final_penalty += 1
-                try:
-                    final_penalty_baht += float(str(r.get(COL_PENALTYBAHT, "0") or 0).replace(",", ""))
-                except Exception:
-                    pass
-            elif final == "ไม่ปรับ":
-                final_no_penalty += 1
-                if dc > 0:
-                    defend_success += 1
-
-            if step == "5":
-                approved += 1
-            elif step == "4":
-                pending_approve += 1
+                total_baht += float(str(row["data"].get("PENALTYBAHT_TRACKB","0") or "0").replace(",",""))
+            except: pass
+            s = str(row["step"] or "").strip()
+            if s in ("1","2","3","4","5"): reviewed += 1
+            fd = str(row["fso_decision"] or "").strip()
+            if fd == "ปรับ": fso_penalty += 1
+            elif fd == "ไม่ปรับ": fso_no_penalty += 1
+            dc = int(row["defend_count"] or 0)
+            if dc > 0: defend_req += 1
+            if dc >= 2: defend_round2 += 1
+            fr = str(row["final_result"] or "").strip()
+            if s in ("4","5"):
+                if fr == "ปรับ":
+                    final_penalty += 1
+                    try: final_baht += float(str(row["data"].get("PENALTYBAHT_TRACKB","0") or "0").replace(",",""))
+                    except: pass
+                elif fr == "ไม่ปรับ": final_no_penalty += 1
+            if s == "5": approved += 1
 
         return jsonify({
-            "total":              total,
-            "reviewed":           reviewed,
-            "reviewed_pct":       round(reviewed / total * 100, 1) if total else 0,
-            "fso_penalty":        fso_penalty,
-            "fso_no_penalty":     fso_no_penalty,
-            "defend_requested":   defend_req,
-            "defend_success":     defend_success,
-            "final_penalty":      final_penalty,
-            "final_no_penalty":   final_no_penalty,
-            "approved":           approved,
-            "pending_approve":    pending_approve,
-            "total_penalty_baht": total_penalty_baht,
-            "final_penalty_baht": final_penalty_baht,
-            "saved_baht":         max(0, total_penalty_baht - final_penalty_baht),
-            "defend_round2":      defend_round2,
+            "total": total, "reviewed": reviewed,
+            "fso_penalty": fso_penalty, "fso_no_penalty": fso_no_penalty,
+            "defend_req": defend_req, "defend_success": 0, "defend_round2": defend_round2,
+            "final_penalty": final_penalty, "final_no_penalty": final_no_penalty,
+            "approved": approved, "pending_approve": final_penalty - approved,
+            "total_penalty_baht": total_baht, "final_penalty_baht": final_baht,
+            "saved_baht": max(0, total_baht - final_baht),
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
-# Serve frontend
+# Audit log
 # ─────────────────────────────────────────────
-
-# -----------------------------------------
-# Bulk Approve (Manager)
-# -----------------------------------------
-@app.route("/api/tickets/bulk-approve", methods=["POST"])
+@app.route("/api/ticket/<ticketid>/audit")
 @login_required
-@require_role(ROLE_MANAGER, "MANAGER", "BBTEC Manager", "BBTEC_MANAGER",
-    "Manager NOR1", "Manager NOR2", "BBTEC_MANAGER_NOR1", "BBTEC_MANAGER_NOR2")
-def bulk_approve():
-    data = request.json or {}
-    ticket_ids = data.get("ticket_ids", [])
-    if not ticket_ids:
-        return jsonify({"error": "ไม่มี ticket ที่เลือก"}), 400
+def get_audit_log(ticketid):
     try:
-        sheet = get_sheet("NOR_Penalty_Ticket")
-        headers = ensure_new_columns(sheet)
-        records = rows_to_dicts(sheet)
-        success_list = []
-        failed_list = []
-        for tid in ticket_ids:
-            ticket = next((r for r in records if str(r.get(COL_TICKETID)) == tid), None)
-            if not ticket:
-                failed_list.append(tid)
-                continue
-            if str(ticket.get(COL_STEP,"")).strip() != "4":
-                failed_list.append(tid)
-                continue
-            row_idx = find_row_index(sheet, tid)
-            if not row_idx:
-                failed_list.append(tid)
-                continue
-            fields = {COL_STEP:"5", COL_LOCKED:"TRUE",
-                      COL_LAST_UPDATED:now_str(), COL_UPDATED_BY:session.get("user"),
-                      COL_REVIEWER:session.get("name")}
-            update_ticket_fields(sheet, headers, row_idx, fields)
-            log_audit_event(tid, "BULK_APPROVE", "Manager Bulk Approve", "4", "5")
-            success_list.append(tid)
-        cache_invalidate_prefix("tickets:")
-        return jsonify({"success": True, "approved": len(success_list),
-                        "failed": len(failed_list)})
+        rows = db_execute(
+            "SELECT ts, username, name, role, action, detail, step_from, step_to FROM audit_log WHERE ticketid=%s ORDER BY ts DESC",
+            (ticketid,), fetch="all"
+        )
+        logs = [{"timestamp": str(r["ts"]), "user": r["username"], "name": r["name"],
+                 "role": r["role"], "action": r["action"], "detail": r["detail"],
+                 "step_from": r["step_from"], "step_to": r["step_to"]} for r in (rows or [])]
+        return jsonify({"logs": logs})
+    except Exception as e:
+        return jsonify({"logs": []})
+
+# ─────────────────────────────────────────────
+# Sync endpoints
+# ─────────────────────────────────────────────
+@app.route("/api/sync", methods=["POST"])
+@login_required
+def manual_sync():
+    try:
+        count = sync_tickets_from_sheets()
+        sync_users_from_sheets()
+        return jsonify({"success": True, "synced": count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/sync/status")
+@login_required
+def sync_status():
+    try:
+        row = db_execute("SELECT COUNT(*) as cnt, MAX(synced_at) as last_sync FROM tickets", fetch="one")
+        return jsonify({"tickets": row["cnt"], "last_sync": str(row["last_sync"])})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────
+# Static + health
+# ─────────────────────────────────────────────
 @app.route("/system-flow.png")
 def serve_sysflow():
     return send_from_directory(app.static_folder, "system-flow.png")
 
-# ─────────────────────────────────────────────
-# Cache management endpoints
-# ─────────────────────────────────────────────
-@app.route("/api/cache/refresh", methods=["POST"])
-@login_required
-def cache_refresh():
-    """Force-clear ticket cache so next request re-fetches from Sheets."""
-    cache_invalidate_prefix("tickets:")
-    return jsonify({"success": True, "message": "Cache cleared — next load will fetch fresh data"})
-
-@app.route("/api/cache/status")
-@login_required
-def cache_status():
-    """Show current cache state (age of each entry)."""
-    with _cache_lock:
-        now = time.time()
-        status = {k: {"age_sec": round(now - v["ts"]), "ttl_remaining": max(0, round(CACHE_TTL - (now - v["ts"])))}
-                  for k, v in _cache.items()}
-    return jsonify({"cache": status, "ttl": CACHE_TTL})
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "db": "postgresql", "service": "BBTEC Smart Defense"}), 200
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
@@ -956,11 +806,27 @@ def serve_frontend(path):
     return send_from_directory(app.static_folder, "index.html")
 
 # ─────────────────────────────────────────────
-# Health check (Railway uses this — no auth needed)
+# Startup
 # ─────────────────────────────────────────────
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "service": "BBTEC Smart Defense"}), 200
+def startup():
+    if not DATABASE_URL:
+        print("⚠️  DATABASE_URL not set — DB features disabled")
+        return
+    try:
+        init_db()
+        # Initial sync on first boot
+        row = db_execute("SELECT COUNT(*) as cnt FROM tickets", fetch="one")
+        if row["cnt"] == 0:
+            print("🔄 First boot — syncing from Sheets...")
+            sync_tickets_from_sheets()
+            sync_users_from_sheets()
+        else:
+            print(f"✅ DB has {row['cnt']} tickets — skipping initial sync")
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+
+with app.app_context():
+    startup()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
