@@ -244,11 +244,27 @@ def ensure_new_columns(sheet):
     return headers
 
 def update_ticket_fields(sheet, headers, row_idx, fields: dict):
-    """Update specific fields for a ticket row."""
+    """Update specific fields using batch_update — 1 API call instead of N calls."""
+    updates = []
     for col_name, value in fields.items():
         col_idx = get_col_index(headers, col_name)
         if col_idx:
-            sheets_retry(sheet.update_cell, row_idx, col_idx, value)
+            # Convert to A1 notation e.g. row 5 col 3 → C5
+            col_letter = col_idx_to_letter(col_idx)
+            updates.append({
+                "range": f"{col_letter}{row_idx}",
+                "values": [[value]]
+            })
+    if updates:
+        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
+
+def col_idx_to_letter(idx):
+    """Convert 1-based column index to A1 letter notation (supports AA, AB etc.)"""
+    result = ""
+    while idx > 0:
+        idx, rem = divmod(idx - 1, 26)
+        result = chr(65 + rem) + result
+    return result
 
 # ─────────────────────────────────────────────
 # Auth
