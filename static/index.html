@@ -505,7 +505,7 @@
         <table id="ticket-table" style="display:none">
           <thead>
             <tr>
-              <th style="width:32px" id="th-cb-head">${canUseBulkSelect(currentUser?.role)?'<input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/>':''}</th>
+              <th style="width:32px" id="th-cb-head"></th>
               <th class="sortable" data-col="TICKETID" onclick="sortTable('TICKETID')">TICKET ID <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="SUBJECT" onclick="sortTable('SUBJECT')">Subject <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="TrackB_Region" onclick="sortTable('TrackB_Region')">Province <span class="sort-icon">⇅</span></th>
@@ -1121,11 +1121,16 @@ function renderTicketTable(tickets){
   const showBulk = canUseBulkSelect(currentUser?.role);
   const cbWrap = $('cb-all-wrap');
   if(cbWrap) cbWrap.innerHTML = showBulk ? '<input type="checkbox" class="cb-ticket" id="cb-all" title="เลือกทั้งหมด" onchange="toggleSelectAll(this)"/>' : '';
+  const thCbHead = $('th-cb-head');
+  if(thCbHead) thCbHead.innerHTML = showBulk ? '<input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/>' : '';
   const bulkBtn = $('btn-bulk-approve');
-  if(bulkBtn && !showBulk) bulkBtn.style.display='none';
+  if(bulkBtn) bulkBtn.style.display = 'none'; // always reset; updateBulkBtn will show if needed
+  const cbCell = showBulk
+    ? (id) => `<input type="checkbox" class="cb-ticket ticket-cb" data-id="${id}" onchange="updateBulkBtn()"/>`
+    : () => '';
   tbody.innerHTML = sorted.slice(0,300).map(t => `
     <tr>
-      <td>${canUseBulkSelect(currentUser?.role)?`<input type="checkbox" class="cb-ticket ticket-cb" data-id="${t.TICKETID||''}" onchange="updateBulkBtn()"/>`:''}</td>
+      <td>${cbCell(t.TICKETID||'')}</td>
       <td><span class="tid">${t.TICKETID||'—'}</span></td>
       <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.SUBJECT||'').replace(/"/g,'')}">${t.SUBJECT||'—'}</td>
       <td style="white-space:nowrap">${t.TrackB_Region||'—'}</td>
