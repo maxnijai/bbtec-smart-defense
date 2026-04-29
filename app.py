@@ -521,8 +521,7 @@ def submit_step1(ticketid):
             overdue_combined = f"{overdue_text} / {link_photo}" if overdue_text else link_photo
 
         fields = {
-            COL_OWNER:          session.get("name"),
-            COL_OWNER1:         session.get("user"),   # login username → column AM
+            COL_OWNER1:         session.get("user"),   # login username → column AW
             COL_GROUP_PROBLEM:  data.get("group_problem", ""),
             COL_SUB_PROBLEM:    data.get("sub_problem", ""),
             COL_ACCIDENT:       data.get("accident", ""),
