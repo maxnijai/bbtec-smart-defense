@@ -531,10 +531,27 @@
 
     <!-- Page: My Tickets -->
     <div class="page" id="page-my-tickets">
-      <div id="my-step-indicator" style="margin-bottom:16px"></div>
+      <div id="my-step-indicator" style="margin-bottom:12px"></div>
       <div class="table-wrap">
-        <div class="table-header">
+        <div class="table-header" style="flex-wrap:wrap;gap:6px">
           <div class="table-title" id="my-tickets-title">Ticket ที่รอดำเนินการ</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center">
+            <input class="search-input" id="my-search" placeholder="ค้นหา TICKETID / Subject..." oninput="renderMyTickets()" style="width:200px"/>
+            <select class="filter-select" id="my-filter-step" onchange="renderMyTickets()">
+              <option value="">ทุก Step</option>
+              <option value="0">รอ Step 1</option>
+              <option value="1">Step 1</option>
+              <option value="2">FSO: ปรับ</option>
+              <option value="3">Defend</option>
+              <option value="4">Final</option>
+            </select>
+            <select class="filter-select" id="my-filter-fso" onchange="renderMyTickets()">
+              <option value="">ทุก FSO</option>
+              <option value="ปรับ">ปรับ</option>
+              <option value="ไม่ปรับ">ไม่ปรับ</option>
+            </select>
+            <button class="btn-action" onclick="clearMyFilters()" id="btn-clear-my" style="display:none;color:var(--red);border-color:var(--red)">✕ ปลด filter</button>
+          </div>
         </div>
         <table>
           <thead>
@@ -1027,15 +1044,35 @@ function renderBahtChart(d){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:28 } },
       plugins:{
         legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>' '+Number(ctx.raw).toLocaleString('th-TH')+' บาท'}}
+        tooltip:{callbacks:{label:ctx=>' '+Number(ctx.raw).toLocaleString('th-TH')+' บาท'}},
+        // inline datalabels via afterDraw
       },
       scales:{
         y:{ticks:{color:'#64748b',font:{size:9},callback:v=>fmtShort(v)},grid:{color:'#d8dde3'}},
         x:{ticks:{color:'#64748b',font:{size:9}},grid:{display:false}}
       }
-    }
+    },
+    plugins:[{
+      id:'topLabels',
+      afterDatasetsDraw(chart){
+        const {ctx, data} = chart;
+        chart.getDatasetMeta(0).data.forEach((bar, i)=>{
+          const v = data.datasets[0].data[i];
+          if(!v) return;
+          const label = fmtShort(v);
+          ctx.save();
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillStyle = '#1a2332';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      }
+    }]
   });
 }
 
@@ -1234,6 +1271,13 @@ function filterTickets(){
     ($('filter-result')?.value||'');
   const btn = $('btn-clear-filter');
   if(btn) btn.style.display = hasFilter ? 'inline-block' : 'none';
+}
+
+function clearMyFilters(){
+  if($('my-search')) $('my-search').value='';
+  if($('my-filter-step')) $('my-filter-step').value='';
+  if($('my-filter-fso')) $('my-filter-fso').value='';
+  renderMyTickets();
 }
 
 function clearFilters(){
@@ -1463,8 +1507,16 @@ function renderMyTickets(){
   let title = 'Ticket ที่รอดำเนินการ';
 
   if(isEngineerRole(role)){
-    // Engineer เห็น: รอ submit (step 0/'') + submit แล้วรอ FSO (step 1) + ขอ Defend แล้ว (step 3)
-    filtered = allTickets.filter(t => !t.STEP || t.STEP==='' || t.STEP==='0' || t.STEP==='1' || t.STEP==='3');
+    // Engineer เห็น: รอ submit + submit แล้ว + FSO สั่งปรับ (รอ Defend/ยอมรับ) + กำลัง Defend
+    filtered = allTickets.filter(t => {
+      const s = String(t.STEP||'').trim();
+      const fso = String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim();
+      const locked = String(t.LOCKED||'').toUpperCase()==='TRUE';
+      if(locked) return false; // ticket lock แล้วไม่ต้องทำอะไร
+      return !s || s==='' || s==='0' || s==='1'
+        || (s==='2' && fso==='ปรับ')  // FSO สั่งปรับ รอ Engineer ขอ Defend หรือยอมรับ
+        || s==='3'; // กำลัง Defend อยู่
+    });
     title = 'Ticket ที่รอฉัน (Engineer)';
   } else if(isFSORole(role)){
     // FSO เห็น: Engineer submit แล้ว (step 1) + Engineer ขอ Defend (step 3)
@@ -1476,6 +1528,23 @@ function renderMyTickets(){
   }
 
   $('my-tickets-title').textContent = title;
+
+  // Apply search/filter
+  const mySearch = ($('my-search')?.value||'').toLowerCase();
+  const myStep   = $('my-filter-step')?.value||'';
+  const myFso    = $('my-filter-fso')?.value||'';
+  if(mySearch || myStep || myFso){
+    filtered = filtered.filter(t => {
+      const matchSearch = !mySearch || (t.TICKETID||'').toLowerCase().includes(mySearch) || (t.SUBJECT||'').toLowerCase().includes(mySearch);
+      const matchStep   = !myStep   || String(t.STEP||'').trim() === myStep;
+      const matchFso    = !myFso    || String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim() === myFso;
+      return matchSearch && matchStep && matchFso;
+    });
+  }
+  const hasMyFilter = mySearch || myStep || myFso;
+  const btnClear = $('btn-clear-my');
+  if(btnClear) btnClear.style.display = hasMyFilter ? 'inline-block' : 'none';
+
   $('my-tbody').innerHTML = filtered.length
     ? filtered.map(t => `
         <tr>
@@ -1703,8 +1772,9 @@ function openTicket(ticket){
           <div style="font-size:11px;color:#15803d;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
           <textarea class="form-textarea" id="f-overdue" style="margin-bottom:0">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
         </div>
-        <div class="modal-actions">
+        <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
           <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn-cancel" onclick="openDrillDown('${ticket.TICKETID}')" style="border-color:var(--accent);color:var(--accent)" title="ดู Queue งานจาก Google Sheet">🔍 Drill Down</button>
           <button class="btn-submit" onclick="submitStep1('${ticket.TICKETID}')">ยืนยัน Step 1 🔒</button>
         </div>
       </div>`;
@@ -2370,5 +2440,76 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch(e){}
 });
 </script>
+<!-- ── Drill Down Modal ── -->
+<div id="drilldown-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;max-width:1100px;margin:0 auto;overflow:hidden">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">🔍 Drill Down — Queue งานที่เกี่ยวข้อง</div>
+        <div style="font-size:11px;color:var(--muted)" id="dd-subtitle"></div>
+      </div>
+      <button onclick="closeDrillDown()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div id="dd-content" style="padding:16px;overflow-x:auto"></div>
+  </div>
+</div>
+
+<script>
+const DRILLDOWN_SHEET_ID = '1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU';
+const DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม','Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log','สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน'];
+
+function openDrillDown(ticketId){
+  $('drilldown-modal').style.display='block';
+  $('dd-subtitle').textContent = `Ticket: ${ticketId}`;
+  $('dd-content').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)"><div class="spinner"></div> กำลังโหลด...</div>';
+  fetchDrillDown(ticketId);
+}
+function closeDrillDown(){
+  $('drilldown-modal').style.display='none';
+}
+async function fetchDrillDown(ticketId){
+  try {
+    const res = await fetch(`${API}/api/drilldown/${encodeURIComponent(ticketId)}`, {credentials:'include'});
+    const data = await res.json();
+    if(data.error){ $('dd-content').innerHTML = `<div style="color:var(--red);padding:16px">❌ ${data.error}</div>`; return; }
+    renderDrillDown(data.rows, ticketId);
+  } catch(e){
+    $('dd-content').innerHTML = '<div style="color:var(--red);padding:16px">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+  }
+}
+function renderDrillDown(rows, ticketId){
+  if(!rows || rows.length===0){
+    $('dd-content').innerHTML = `
+      <div style="text-align:center;padding:32px;color:var(--muted)">
+        <div style="font-size:24px;margin-bottom:8px">🔍</div>
+        <div>ไม่พบ Queue งานสำหรับ Ticket: <strong>${ticketId}</strong></div>
+        <div style="margin-top:10px"><a href="https://docs.google.com/spreadsheets/d/${DRILLDOWN_SHEET_ID}/edit" target="_blank" style="color:var(--accent);font-size:12px">เปิด Google Sheet ↗</a></div>
+      </div>`;
+    return;
+  }
+  $('dd-subtitle').textContent = `Ticket: ${ticketId} — พบ ${rows.length} Queue`;
+  let tbl = `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;color:var(--muted)">พบ <strong style="color:var(--text)">${rows.length}</strong> Queue งาน</span>
+    <a href="https://docs.google.com/spreadsheets/d/${DRILLDOWN_SHEET_ID}/edit" target="_blank" style="font-size:11px;color:var(--accent)">เปิด Google Sheet ↗</a>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+  <thead><tr style="background:var(--bg3)">`;
+  DRILLDOWN_COLS.forEach(c=>{
+    tbl+=`<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--muted);font-size:10px">${c}</th>`;
+  });
+  tbl+='</tr></thead><tbody>';
+  rows.forEach((row,i)=>{
+    tbl+=`<tr style="background:${i%2===0?'transparent':'var(--bg3)'}">`;
+    DRILLDOWN_COLS.forEach(c=>{
+      const v = row[c]||'—';
+      tbl+=`<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(v).replace(/"/g,'&quot;')}">${v}</td>`;
+    });
+    tbl+='</tr>';
+  });
+  tbl+='</tbody></table>';
+  $('dd-content').innerHTML = tbl;
+}
+</script>
+
 </body>
 </html>
