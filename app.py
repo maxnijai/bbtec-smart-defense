@@ -850,6 +850,10 @@ def bulk_approve():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/system-flow.png")
+def serve_sysflow():
+    return send_from_directory(app.static_folder, "system-flow.png")
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
