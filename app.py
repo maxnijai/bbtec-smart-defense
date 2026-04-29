@@ -153,13 +153,13 @@ def init_db():
 # Sync: Sheets → DB  (run on startup + /api/sync)
 # ─────────────────────────────────────────────
 def sync_tickets_from_sheets():
-    """Pull all tickets from Sheets and upsert into DB. Deletes tickets no longer in Sheets."""
+    """Pull all tickets from Sheets and upsert into DB. Sheets is master — overwrites all fields."""
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
         records = rows_to_dicts(sheet)
         if not records:
             return 0
-        # Build set of all ticket IDs from Sheets
+
         sheet_ids = set()
         for r in records:
             tid = str(r.get("TICKETID","")).strip()
@@ -170,32 +170,36 @@ def sync_tickets_from_sheets():
         count = 0
         try:
             with conn.cursor() as cur:
-                # Upsert all tickets from Sheets
                 for r in records:
                     tid = str(r.get("TICKETID","")).strip()
                     if not tid:
                         continue
-                    cur.execute("SELECT step, defend_count, locked, fso_decision, final_result, owner1, updated_by FROM tickets WHERE ticketid=%s", (tid,))
-                    existing = cur.fetchone()
-                    if existing:
-                        # Keep DB workflow fields, only update sheet data
-                        cur.execute("UPDATE tickets SET data=%s, synced_at=NOW() WHERE ticketid=%s",
-                                    (json.dumps(r), tid))
-                    else:
-                        cur.execute("""
-                            INSERT INTO tickets (ticketid, data, step, defend_count, locked,
-                                fso_decision, final_result, owner1, updated_by)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        """, (
-                            tid, json.dumps(r),
-                            str(r.get("STEP","")).strip(),
-                            int(r.get("DEFEND_COUNT",0) or 0),
-                            str(r.get("LOCKED","")).upper()=="TRUE",
-                            str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip(),
-                            str(r.get("FINAL_RESULT","")).strip(),
-                            str(r.get("owner1","")).strip(),
-                            str(r.get("UPDATED_BY","")).strip(),
-                        ))
+                    # Sheets is master — take ALL fields from Sheets including step/fso/final
+                    step         = str(r.get("STEP","")).strip()
+                    defend_count = int(r.get("DEFEND_COUNT",0) or 0)
+                    locked       = str(r.get("LOCKED","")).upper() == "TRUE"
+                    fso_decision = str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip()
+                    final_result = str(r.get("FINAL_RESULT","")).strip()
+                    owner1       = str(r.get("owner1","")).strip()
+                    updated_by   = str(r.get("UPDATED_BY","")).strip()
+
+                    cur.execute("""
+                        INSERT INTO tickets
+                            (ticketid, data, step, defend_count, locked,
+                             fso_decision, final_result, owner1, updated_by, synced_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                        ON CONFLICT (ticketid) DO UPDATE SET
+                            data         = EXCLUDED.data,
+                            step         = EXCLUDED.step,
+                            defend_count = EXCLUDED.defend_count,
+                            locked       = EXCLUDED.locked,
+                            fso_decision = EXCLUDED.fso_decision,
+                            final_result = EXCLUDED.final_result,
+                            owner1       = EXCLUDED.owner1,
+                            updated_by   = EXCLUDED.updated_by,
+                            synced_at    = NOW()
+                    """, (tid, json.dumps(r), step, defend_count, locked,
+                          fso_decision, final_result, owner1, updated_by))
                     count += 1
 
                 # Delete tickets no longer in Sheets
