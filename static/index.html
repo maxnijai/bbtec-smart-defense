@@ -544,6 +544,8 @@
               <th>ค่าปรับ (บาท)</th>
               <th>Defend ครั้งที่</th>
               <th>สถานะ</th>
+              <th>FSO ตัดสิน</th>
+              <th>Final</th>
               <th>ดำเนินการ</th>
             </tr>
           </thead>
@@ -910,20 +912,20 @@ function renderKPI(d){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
           <div style="text-align:center">
             <div style="font-size:10px;color:#fcd34d">ขอ DEFEND</div>
-            <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmt(d.defend_requested)}</div>
+            <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmt(d.defend_req||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:10px;color:var(--muted)">ไม่ DEFEND</div>
-            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(Math.max(0,(d.fso_penalty||0)-(d.defend_requested||0)))}</div>
+            <div style="font-size:10px;color:var(--muted)">ไม่ Defend (ยอมรับ)</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(d.no_defend||0)}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <div style="background:#f0f2f4;border-radius:6px;padding:6px;text-align:center">
-            <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 1</div>
-            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_requested)}</div>
+            <div style="font-size:10px;color:var(--muted)">Defend ครั้งที่ 1</div>
+            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_req||0)}</div>
           </div>
           <div style="background:#f0f2f4;border-radius:6px;padding:6px;text-align:center">
-            <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 2</div>
+            <div style="font-size:10px;color:var(--muted)">Defend ครั้งที่ 2</div>
             <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_round2||0)}</div>
           </div>
         </div>
@@ -1479,13 +1481,15 @@ function renderMyTickets(){
         <tr>
           <td><span class="tid">${t.TICKETID}</span></td>
           <td>${(t.SUBJECT||'').substring(0,60)}</td>
-          <td>${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
-          <td>${t.DEFEND_COUNT||'0'} / 2</td>
+          <td style="text-align:right;color:var(--red);font-weight:600">${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
+          <td style="text-align:center">${t.DEFEND_COUNT||'0'} / 2</td>
           <td>${stepBadge(t.STEP, t.DEFEND_COUNT, t['FSO พิจารณา (ปรับ/ไม่ปรับ)'], t.FINAL_RESULT)}</td>
+          <td>${resultBadge(t['FSO พิจารณา (ปรับ/ไม่ปรับ)'])}</td>
+          <td>${resultBadge(t.FINAL_RESULT)}</td>
           <td><button class="btn-action" onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>ดำเนินการ</button></td>
         </tr>
       `).join('')
-    : '<tr class="empty-row"><td colspan="6">ไม่มี Ticket ที่รอดำเนินการ</td></tr>';
+    : '<tr class="empty-row"><td colspan="8">ไม่มี Ticket ที่รอดำเนินการ</td></tr>';
 }
 
 // ── Charts ──
@@ -2029,11 +2033,15 @@ function optimisticUpdate(tid, patch){
   if(idx !== -1){
     allTickets[idx] = {...allTickets[idx], ...patch};
     allTicketsRaw = allTickets;
-    _optimisticLocks[tid] = Date.now(); // lock this ticket for 8s
+    _optimisticLocks[tid] = Date.now();
   }
   renderTicketTable(getFilteredTickets());
   renderTicketsKPI(getFilteredTickets());
   renderPivotTable(allTicketsRaw);
+  // Re-render my-tickets immediately so completed ticket disappears
+  if(document.getElementById('page-my-tickets')?.style.display !== 'none'){
+    renderMyTickets();
+  }
 }
 
 // Merge server data but respect optimistic locks
@@ -2073,15 +2081,18 @@ function hasActiveLocks(){
 
 function safeLoadTickets(){
   if(hasActiveLocks()){
-    // Retry after locks expire
-    setTimeout(safeLoadTickets, 1000);
-    return;
+    return new Promise(resolve => setTimeout(()=> safeLoadTickets().then(resolve), 1000));
   }
-  loadTickets().catch(()=>{});
+  return loadTickets().catch(()=>{});
 }
 
 function safeRefresh(){
-  safeLoadTickets();
+  safeLoadTickets().then(()=>{
+    // Re-render my-tickets page if currently visible
+    if(document.getElementById('page-my-tickets')?.style.display !== 'none'){
+      renderMyTickets();
+    }
+  });
   loadDashboard().catch(()=>{});
 }
 async function apiPostSilent(url, body){
