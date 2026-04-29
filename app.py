@@ -113,6 +113,7 @@ COL_PENALTYBAHT         = "PENALTYBAHT_TRACKB"
 
 # Step 1 — Engineer fills
 COL_OWNER               = "Owner"
+COL_OWNER1              = "owner1"          # Column AM — login user who submitted Step 1
 COL_GROUP_PROBLEM       = "Group problem"
 COL_SUB_PROBLEM         = "Sub Problem"
 COL_ACCIDENT            = "Accident"
@@ -139,7 +140,7 @@ COL_LAST_UPDATED        = "LAST_UPDATED"
 COL_UPDATED_BY          = "UPDATED_BY"
 COL_FINAL_RESULT        = "FINAL_RESULT"
 
-NEW_COLUMNS = [COL_STEP, COL_DEFEND_COUNT, COL_LOCKED, COL_LAST_UPDATED, COL_UPDATED_BY, COL_FINAL_RESULT]
+NEW_COLUMNS = [COL_STEP, COL_DEFEND_COUNT, COL_LOCKED, COL_LAST_UPDATED, COL_UPDATED_BY, COL_FINAL_RESULT, COL_OWNER1]
 
 # ─────────────────────────────────────────────
 # Role definitions
@@ -521,6 +522,7 @@ def submit_step1(ticketid):
 
         fields = {
             COL_OWNER:          session.get("name"),
+            COL_OWNER1:         session.get("user"),   # login username → column AM
             COL_GROUP_PROBLEM:  data.get("group_problem", ""),
             COL_SUB_PROBLEM:    data.get("sub_problem", ""),
             COL_ACCIDENT:       data.get("accident", ""),
