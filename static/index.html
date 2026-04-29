@@ -1866,8 +1866,36 @@ async function submitApprove(tid){
   await apiPost(`/api/ticket/${tid}/approve`, {});
 }
 
+// ── Optimistic UI helpers ──
+function optimisticUpdate(tid, patch){
+  // Update allTickets in memory immediately so UI reflects change instantly
+  const idx = allTickets.findIndex(t => String(t.TICKETID) === String(tid));
+  if(idx !== -1){
+    allTickets[idx] = {...allTickets[idx], ...patch};
+    allTicketsRaw = allTickets;
+  }
+  renderTicketTable(getFilteredTickets());
+  renderTicketsKPI(getFilteredTickets());
+  renderPivotTable(allTicketsRaw);
+}
+
+// Map endpoint → which fields change so we can patch locally
+function getPatchFromUrl(url, body){
+  if(url.includes('/step1'))    return { STEP:'1', 'Group problem': body.group_problem||'', 'Sub Problem': body.sub_problem||'', 'Overdue Detail แนบLINK รูป': body.overdue_detail||'', 'แนบ LINK ชี้แจง': body.link_evidence||'' };
+  if(url.includes('/step2'))    return { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': body.fso_decision||'' };
+  if(url.includes('/defend/request')) return { STEP:'3' };
+  if(url.includes('/defend/review'))  return { STEP:'3', FINAL_RESULT: body.decision||'' };
+  if(url.includes('/accept'))   return { STEP:'4', FINAL_RESULT:'ปรับ' };
+  if(url.includes('/approve'))  return { STEP:'5' };
+  return {};
+}
+
 async function apiPost(url, body){
   try {
+    // Extract ticket ID from URL e.g. /api/ticket/INC001.../step1
+    const tidMatch = url.match(/\/api\/ticket\/([^\/]+)\//);
+    const tid = tidMatch ? tidMatch[1] : null;
+
     const res = await fetch(API+url,{
       method:'POST',credentials:'include',
       headers:{'Content-Type':'application/json'},
@@ -1876,9 +1904,20 @@ async function apiPost(url, body){
     const data = await res.json();
     if(data.success){
       showToast(data.message||'สำเร็จ','success');
+
+      // ── Optimistic: update UI immediately from local data ──
+      if(tid){
+        const patch = getPatchFromUrl(url, body);
+        optimisticUpdate(tid, patch);
+      }
       closeModal();
-      loadTickets();
-      loadDashboard();
+
+      // ── Background refresh (non-blocking) — sync actual data from server ──
+      setTimeout(()=>{
+        loadTickets().catch(()=>{});
+        loadDashboard().catch(()=>{});
+      }, 800);
+
     } else {
       showToast(data.error||'เกิดข้อผิดพลาด','error');
     }
