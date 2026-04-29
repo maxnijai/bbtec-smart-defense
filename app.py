@@ -733,29 +733,58 @@ def dashboard_summary():
             try:
                 total_baht += float(str(row["data"].get("PENALTYBAHT_TRACKB","0") or "0").replace(",",""))
             except: pass
-            s = str(row["step"] or "").strip()
-            if s in ("1","2","3","4","5"): reviewed += 1
+            s  = str(row["step"] or "").strip()
             fd = str(row["fso_decision"] or "").strip()
-            if fd == "ปรับ": fso_penalty += 1
-            elif fd == "ไม่ปรับ": fso_no_penalty += 1
-            dc = int(row["defend_count"] or 0)
-            if dc > 0: defend_req += 1
-            if dc >= 2: defend_round2 += 1
             fr = str(row["final_result"] or "").strip()
+            dc = int(row["defend_count"] or 0)
+
+            # reviewed = มีการ submit Step 1 ขึ้นไปแล้ว
+            if s in ("1","2","3","4","5"): reviewed += 1
+
+            # FSO decision — นับเฉพาะที่ FSO ตัดสินแล้วจริงๆ (step >= 2)
+            if s in ("2","3","4","5"):
+                if fd == "ปรับ":   fso_penalty += 1
+                elif fd == "ไม่ปรับ": fso_no_penalty += 1
+
+            # Defend — นับเฉพาะ ticket ที่เคยขอ Defend (defend_count > 0)
+            # ไม่นับ ticket ที่ไม่ปรับตั้งแต่แรก (ไม่ได้ defend)
+            if dc > 0:
+                defend_req += 1
+                if dc >= 2: defend_round2 += 1
+
+            # Final result — step 4 หรือ 5 เท่านั้น
             if s in ("4","5"):
                 if fr == "ปรับ":
                     final_penalty += 1
                     try: final_baht += float(str(row["data"].get("PENALTYBAHT_TRACKB","0") or "0").replace(",",""))
                     except: pass
-                elif fr == "ไม่ปรับ": final_no_penalty += 1
+                elif fr == "ไม่ปรับ":
+                    final_no_penalty += 1
+
             if s == "5": approved += 1
+
+        # defend_success = ticket ที่ defend แล้วได้ผล ไม่ปรับ
+        defend_success = 0
+        no_defend_count = 0  # FSO ตัดสินปรับ แต่ไม่ขอ Defend (ยอมรับหรือรอ)
+        for row in (rows or []):
+            dc = int(row["defend_count"] or 0)
+            fr = str(row["final_result"] or "").strip()
+            fd = str(row["fso_decision"] or "").strip()
+            s  = str(row["step"] or "").strip()
+            if dc > 0 and fr == "ไม่ปรับ":
+                defend_success += 1
+            # ไม่ Defend = FSO ตัดสินปรับ + step >= 2 + defend_count = 0
+            if fd == "ปรับ" and dc == 0 and s in ("2","4","5"):
+                no_defend_count += 1
 
         return jsonify({
             "total": total, "reviewed": reviewed,
             "fso_penalty": fso_penalty, "fso_no_penalty": fso_no_penalty,
-            "defend_req": defend_req, "defend_success": 0, "defend_round2": defend_round2,
+            "defend_req": defend_req, "defend_success": defend_success,
+            "no_defend": no_defend_count,
+            "defend_round2": defend_round2,
             "final_penalty": final_penalty, "final_no_penalty": final_no_penalty,
-            "approved": approved, "pending_approve": final_penalty - approved,
+            "approved": approved, "pending_approve": max(0, final_penalty - approved),
             "total_penalty_baht": total_baht, "final_penalty_baht": final_baht,
             "saved_baht": max(0, total_baht - final_baht),
         })
