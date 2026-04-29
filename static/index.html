@@ -29,19 +29,19 @@
   .cb-ticket{width:14px;height:14px;cursor:pointer;accent-color:var(--accent)}
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#0b1220;
-    --bg2:#111a2e;
-    --bg3:#162035;
-    --card:#1a2640;
-    --border:#253550;
-    --text:#e2ecff;
-    --muted:#8aa0c0;
-    --accent:#3b82f6;
-    --accent2:#06b6d4;
-    --green:#10b981;
-    --red:#ef4444;
-    --amber:#f59e0b;
-    --purple:#a78bfa;
+    --bg:#f7f6f3;
+    --bg2:#f0ede8;
+    --bg3:#e8e4de;
+    --card:#ffffff;
+    --border:#d5d0c8;
+    --text:#1a1917;
+    --muted:#6b6560;
+    --accent:#c07400;
+    --accent2:#b45309;
+    --green:#059669;
+    --red:#dc2626;
+    --amber:#d97706;
+    --purple:#7c3aed;
     --font:'IBM Plex Sans Thai',sans-serif;
     --mono:'IBM Plex Mono',monospace;
   }
@@ -51,7 +51,7 @@
   #login-screen{
     display:flex;align-items:center;justify-content:center;
     min-height:100vh;
-    background:radial-gradient(ellipse at 30% 40%,#0d2144 0%,#0b1220 60%);
+    background:radial-gradient(ellipse at 30% 40%,#e8dfc8 0%,#f7f6f3 60%);
   }
   .login-box{
     width:360px;
@@ -90,7 +90,7 @@
     background:var(--bg3);border:1px solid var(--border);
     border-radius:8px;padding:10px 14px;cursor:pointer;transition:border .15s;
   }
-  .sys-btn.selected{border-color:var(--accent);background:#1e3a5f}
+  .sys-btn.selected{border-color:var(--accent);background:#fef3c7}
   .sys-btn-icon{font-size:16px}
   .sys-btn-label{font-size:13px;font-weight:500}
   .sys-btn-sub{font-size:11px;color:var(--muted)}
@@ -124,7 +124,7 @@
     margin-bottom:2px;
   }
   .nav-item:hover{background:var(--bg3);color:var(--text)}
-  .nav-item.active{background:#1e3a5f;color:#93c5fd;font-weight:500}
+  .nav-item.active{background:#fef3c7;color:#b45309;font-weight:500}
   .nav-icon{font-size:14px;width:18px;text-align:center}
   .sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
   .user-info{display:flex;align-items:center;gap:10px}
@@ -192,7 +192,7 @@
   }
   .search-input:focus{border-color:var(--accent)}
   .sortable{cursor:pointer;user-select:none}
-  .sortable:hover{background:#1e2e44;color:var(--text)}
+  .sortable:hover{background:#e8e4de;color:var(--text)}
   .sort-icon{font-size:10px;opacity:.6}
   th.sort-asc .sort-icon::after{content:'↑';opacity:1}
   th.sort-desc .sort-icon::after{content:'↓';opacity:1}
@@ -200,8 +200,8 @@
   .pivot-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
   .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;top:0;z-index:2}
   .pivot-table tr.data-row{cursor:pointer;transition:background .12s}
-  .pivot-table tr.data-row:hover td{background:#1e3a5f}
-  .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent2)}
+  .pivot-table tr.data-row:hover td{background:#fef3c7}
+  .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent)}
   .pivot-table th:first-child{text-align:left;width:52px}
   .pivot-table th:nth-child(2){text-align:left;width:110px}
   .pivot-table th:nth-child(3),.pivot-table th:nth-child(4){width:60px}
@@ -213,7 +213,7 @@
   .pivot-table td:nth-child(2){text-align:left;font-weight:500;color:var(--text)}
   .pivot-table tr.region-row td{background:var(--bg3);font-weight:700;color:var(--accent2);font-size:11px}
   .pivot-table tr.region-row td:first-child{padding-left:8px}
-  .pivot-table tr.total-row td{background:#162035;font-weight:700;color:var(--text);border-top:2px solid var(--accent)}
+  .pivot-table tr.total-row td{background:#fef3c7;font-weight:700;color:var(--text);border-top:2px solid var(--accent)}
   .pivot-table .num-green{color:#10b981;font-weight:600}
   .pivot-table .num-red{color:#ef4444;font-weight:600}
   .pivot-table .num-amber{color:#f59e0b;font-weight:600}
@@ -221,11 +221,11 @@
   .pivot-table .pct{font-size:10px;color:var(--muted)}
   /* %S1 heat badge */
   .pct-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;min-width:42px;text-align:center}
-  .pct-0{background:rgba(239,68,68,.15);color:#ef4444}
-  .pct-low{background:rgba(245,158,11,.15);color:#f59e0b}
-  .pct-mid{background:rgba(59,130,246,.18);color:#93c5fd}
-  .pct-high{background:rgba(16,185,129,.18);color:#10b981}
-  .pct-full{background:rgba(167,139,250,.18);color:#a78bfa}
+  .pct-0{background:#fee2e2;color:#991b1b}
+  .pct-low{background:#fef3c7;color:#92400e}
+  .pct-mid{background:#dbeafe;color:#1e40af}
+  .pct-high{background:#d1fae5;color:#065f46}
+  .pct-full{background:#ede9fe;color:#5b21b6}
   table{width:100%;border-collapse:collapse}
   th{
     padding:10px 14px;text-align:left;font-size:11px;font-weight:500;
@@ -237,21 +237,21 @@
     vertical-align:middle;
   }
   tr:last-child td{border-bottom:none}
-  tr:hover td{background:#162035}
+  tr:hover td{background:#fef9ee}
   .tid{font-family:var(--mono);font-size:11px;color:var(--accent2)}
   .badge{
     display:inline-block;padding:2px 9px;border-radius:10px;
     font-size:10px;font-weight:500;
   }
-  .badge-1{background:#2d3a1a;color:#86efac}
-  .badge-2{background:#1a2a3d;color:#93c5fd}
-  .badge-3{background:#3d2a1a;color:#fcd34d}
-  .badge-4{background:#1a3a2d;color:#6ee7b7}
-  .badge-5{background:#1f1a3d;color:#c4b5fd}
-  .badge-lock{background:#1a1a1a;color:#6b7280}
-  .badge-penalty{background:#3d1a1a;color:#fca5a5}
-  .badge-no-penalty{background:#1a3d2a;color:#6ee7b7}
-  .badge-defend{background:#3d2d1a;color:#fcd34d}
+  .badge-1{background:#d1fae5;color:#065f46}
+  .badge-2{background:#dbeafe;color:#1d4ed8}
+  .badge-3{background:#fef3c7;color:#92400e}
+  .badge-4{background:#d1fae5;color:#065f46}
+  .badge-5{background:#ede9fe;color:#5b21b6}
+  .badge-lock{background:#f3f4f6;color:#4b5563}
+  .badge-penalty{background:#fee2e2;color:#991b1b}
+  .badge-no-penalty{background:#d1fae5;color:#065f46}
+  .badge-defend{background:#fef3c7;color:#92400e}
   .btn-action{
     background:transparent;border:1px solid var(--border);
     color:var(--text);border-radius:6px;padding:4px 12px;
@@ -278,7 +278,7 @@
     transition:all .3s;
   }
   .sp-circle.done{background:#065f46;border-color:#10b981;color:#6ee7b7}
-  .sp-circle.active{background:#1e3a5f;border-color:#3b82f6;color:#93c5fd}
+  .sp-circle.active{background:#fef3c7;border-color:#c07400;color:#92400e}
   .sp-label{font-size:10px;color:var(--muted)}
   .sp-line{flex:none;height:2px;width:32px;background:var(--border);margin-bottom:14px}
   .sp-line.done{background:#10b981}
@@ -319,8 +319,8 @@
     font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;
   }
   .dec-btn:hover{border-color:var(--accent)}
-  .dec-btn.selected-penalty{border-color:var(--red);background:#3d1a1a;color:#fca5a5}
-  .dec-btn.selected-no-penalty{border-color:var(--green);background:#1a3d2a;color:#6ee7b7}
+  .dec-btn.selected-penalty{border-color:var(--red);background:#fee2e2;color:#991b1b}
+  .dec-btn.selected-no-penalty{border-color:var(--green);background:#d1fae5;color:#065f46}
   .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
   .btn-cancel{
     background:transparent;border:1px solid var(--border);
@@ -806,7 +806,7 @@ function renderKPI(d){
             <div style="font-size:20px;font-weight:700;color:#10b981">${pct}%</div>
           </div>
         </div>
-        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+        <div style="background:#f0ede8;border-radius:6px;padding:8px;text-align:center">
           <div style="font-size:10px;color:var(--muted)">Penalty Amount</div>
           <div style="font-size:15px;font-weight:700;color:#f59e0b">${fmtM(d.total_penalty_baht)} บาท</div>
         </div>
@@ -836,11 +836,11 @@ function renderKPI(d){
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
-          <div style="background:#3d1a1a;border-radius:6px;padding:6px;text-align:center">
+          <div style="background:#fee2e2;border-radius:6px;padding:6px;text-align:center">
             <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
             <div style="font-size:13px;font-weight:700;color:#ef4444">${fmtM(d.total_penalty_baht)} บาท</div>
           </div>
-          <div style="background:#1a3d2a;border-radius:6px;padding:6px;text-align:center">
+          <div style="background:#d1fae5;border-radius:6px;padding:6px;text-align:center">
             <div style="font-size:10px;color:#6ee7b7">Penalty Amount (ไม่ปรับ)</div>
             <div style="font-size:13px;font-weight:700;color:#10b981">${fmtM(d.saved_baht)} บาท</div>
           </div>
@@ -864,11 +864,11 @@ function renderKPI(d){
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div style="background:#1a1a1a;border-radius:6px;padding:6px;text-align:center">
+          <div style="background:#f0ede8;border-radius:6px;padding:6px;text-align:center">
             <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 1</div>
             <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_requested)}</div>
           </div>
-          <div style="background:#1a1a1a;border-radius:6px;padding:6px;text-align:center">
+          <div style="background:#f0ede8;border-radius:6px;padding:6px;text-align:center">
             <div style="font-size:10px;color:var(--muted)">Defend รอบที่ 2</div>
             <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_round2||0)}</div>
           </div>
@@ -891,7 +891,7 @@ function renderKPI(d){
             <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
           </div>
         </div>
-        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+        <div style="background:#f0ede8;border-radius:6px;padding:8px;text-align:center">
           <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
           <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
         </div>
@@ -913,7 +913,7 @@ function renderKPI(d){
             <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(d.pending_approve)}</div>
           </div>
         </div>
-        <div style="background:#1a1a1a;border-radius:6px;padding:8px;text-align:center">
+        <div style="background:#f0ede8;border-radius:6px;padding:8px;text-align:center">
           <div style="font-size:10px;color:#c4b5fd">Final Penalty Amount</div>
           <div style="font-size:14px;font-weight:700;color:#a78bfa">${fmtM(d.final_penalty_baht)} บาท</div>
         </div>
@@ -944,7 +944,7 @@ function renderFsoChart(d){
       labels:['ปรับ','ไม่ปรับ'],
       datasets:[{data:[d.fso_penalty,d.fso_no_penalty],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]
     },
-    options:{plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:11}}}},cutout:'65%'}
+    options:{plugins:{legend:{position:'bottom',labels:{color:'#6b6560',font:{size:11}}}},cutout:'65%'}
   });
 }
 
@@ -976,8 +976,8 @@ function renderBahtChart(d){
         tooltip:{callbacks:{label:ctx=>' '+Number(ctx.raw).toLocaleString('th-TH')+' บาท'}}
       },
       scales:{
-        y:{ticks:{color:'#8aa0c0',font:{size:9},callback:v=>fmtShort(v)},grid:{color:'#253550'}},
-        x:{ticks:{color:'#8aa0c0',font:{size:9}},grid:{display:false}}
+        y:{ticks:{color:'#6b6560',font:{size:9},callback:v=>fmtShort(v)},grid:{color:'#d5d0c8'}},
+        x:{ticks:{color:'#6b6560',font:{size:9}},grid:{display:false}}
       }
     }
   });
@@ -1128,7 +1128,7 @@ function renderTicketTable(tickets){
   const cbCell = showBulk
     ? (id) => `<input type="checkbox" class="cb-ticket ticket-cb" data-id="${id}" onchange="updateBulkBtn()"/>`
     : () => '';
-  tbody.innerHTML = sorted.slice(0,300).map(t => `
+  tbody.innerHTML = sorted.map(t => `
     <tr>
       <td>${cbCell(t.TICKETID||'')}</td>
       <td><span class="tid">${t.TICKETID||'—'}</span></td>
@@ -1345,7 +1345,7 @@ function renderMyTickets(){
 
   $('my-tickets-title').textContent = title;
   $('my-tbody').innerHTML = filtered.length
-    ? filtered.slice(0,100).map(t => `
+    ? filtered.map(t => `
         <tr>
           <td><span class="tid">${t.TICKETID}</span></td>
           <td>${(t.SUBJECT||'').substring(0,60)}</td>
@@ -1432,18 +1432,18 @@ function renderCharts(){
       '<div class="chart-card">' +
         '<div class="chart-title" style="font-size:13px;margin-bottom:12px">💰 Penalty Breakdown</div>' +
         '<div style="display:flex;flex-direction:column;gap:10px">' +
-          '<div style="background:#3d1a1a;border-radius:8px;padding:12px;text-align:center">' +
+          '<div style="background:#fee2e2;border-radius:8px;padding:12px;text-align:center">' +
             '<div style="font-size:10px;color:#fca5a5">ค่าปรับรวมทั้งหมด</div>' +
             '<div style="font-size:24px;font-weight:700;color:#ef4444">'+fmtM(totalBaht)+'</div>' +
             '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            '<div style="background:#1a3d2a;border-radius:8px;padding:10px;text-align:center">' +
+            '<div style="background:#d1fae5;border-radius:8px;padding:10px;text-align:center">' +
               '<div style="font-size:10px;color:#6ee7b7">ลดได้จาก Defend</div>' +
               '<div style="font-size:18px;font-weight:700;color:#10b981">'+fmtM(savedBaht)+'</div>' +
               '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
             '</div>' +
-            '<div style="background:#3d1a1a;border-radius:8px;padding:10px;text-align:center">' +
+            '<div style="background:#fee2e2;border-radius:8px;padding:10px;text-align:center">' +
               '<div style="font-size:10px;color:#fca5a5">Final Penalty</div>' +
               '<div style="font-size:18px;font-weight:700;color:#ef4444">'+fmtM(finalBaht)+'</div>' +
               '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
@@ -1471,7 +1471,7 @@ function renderCharts(){
         datasets:[{data:[finalBaht, savedBaht],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]
       },
       options:{
-        plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:10}}}},
+        plugins:{legend:{position:'bottom',labels:{color:'#6b6560',font:{size:10}}}},
         cutout:'60%'
       }
     });
@@ -1561,11 +1561,11 @@ function openTicket(ticket){
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident (ถ้ามี)</div>
           <input class="form-input" id="f-accident" placeholder="Accident" value="${ticket.Accident||''}"/>
         </div>
-        <div style="margin-bottom:12px;background:#1a2640;border:1px solid #253550;border-radius:8px;padding:12px">
+        <div style="margin-bottom:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px">
           <div style="font-size:11px;color:#93c5fd;margin-bottom:6px;font-weight:600">🔗 แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
           <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||ticket['แนบ LINK ชี้แจง (AH)']||''}"/>
         </div>
-        <div style="margin-bottom:12px;background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:12px">
+        <div style="margin-bottom:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
           <div style="font-size:11px;color:#6ee7b7;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
           <textarea class="form-textarea" id="f-overdue" style="margin-bottom:0">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
         </div>
@@ -1588,8 +1588,8 @@ function openTicket(ticket){
       <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
         ${[1,2].map(r=>`
           <div style="padding:3px 10px;border-radius:10px;font-size:11px;
-            background:${r<=defendCount?'#3d2a1a':'var(--bg3)'};
-            color:${r<=defendCount?'#fcd34d':'var(--muted)'};
+            background:${r<=defendCount?'#fef3c7':'var(--bg3)'};
+            color:${r<=defendCount?'#92400e':'var(--muted)'};
             border:1px solid ${r<=defendCount?'#92400e':'var(--border)'}">
             Defend ครั้งที่ ${r} ${r<=defendCount?'(ใช้แล้ว)':''}
           </div>`).join('')}
@@ -1598,7 +1598,7 @@ function openTicket(ticket){
       <div class="form-section">
         <div class="form-section-title">STEP 2 — ผลการพิจารณาจาก FSO</div>
         <div style="padding:14px;border-radius:10px;margin-bottom:12px;text-align:center;
-          background:${isNoPenalty?'#1a3d2a':'#3d1a1a'};
+          background:${isNoPenalty?'#d1fae5':'#fee2e2'};
           border:2px solid ${isNoPenalty?'#10b981':'#ef4444'}">
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px">ผลการพิจารณา FSO</div>
           <div style="font-size:22px;font-weight:700;color:${isNoPenalty?'#6ee7b7':'#fca5a5'}">
@@ -1617,7 +1617,7 @@ function openTicket(ticket){
           <div style="font-size:13px;color:var(--text);line-height:1.6">${ticket['Remark FSO']||ticket['remark_fso']||''}</div>
         </div>` : ''}
         ${isNoPenalty ? 
-          `<div style="text-align:center;color:#6ee7b7;padding:12px;background:#1a3d2a;border-radius:8px">
+          `<div style="text-align:center;color:#065f46;padding:12px;background:#d1fae5;border-radius:8px">
             ✅ FSO ตัดสิน ไม่ปรับ — รอ Manager Approve
           </div>` :
           canDefend ? `
@@ -1626,7 +1626,7 @@ function openTicket(ticket){
               onclick="showDefendForm('${ticket.TICKETID}',${defendCount})">
               ⚔️ ขอ Defend ครั้งที่ ${nextRound}/2
             </button>
-            <button class="btn-submit" style="background:#3d1a1a;border:2px solid #ef4444;padding:16px;border-radius:10px;font-size:14px;cursor:pointer"
+            <button class="btn-submit" style="background:#fee2e2;border:2px solid #dc2626;padding:16px;border-radius:10px;font-size:14px;cursor:pointer"
               onclick="acceptPenalty('${ticket.TICKETID}')">
               ✋ ยอมรับค่าปรับ
             </button>
@@ -2007,11 +2007,11 @@ function renderTop5(){
   if(!pending.length){ el.style.display='none'; return; }
   const fmtM = n=>{const v=Number(n||0);return v>=1000000?(v/1000000).toFixed(1)+'M':Number(v).toLocaleString('th-TH');};
   el.innerHTML = pending.map(t=>`
-    <div style="background:#3d1a1a;border:1px solid #ef4444;border-radius:8px;padding:8px 10px;cursor:pointer"
+    <div style="background:#fee2e2;border:1px solid #dc2626;border-radius:8px;padding:8px 10px;cursor:pointer"
          onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
-      <div style="font-size:9px;color:#fca5a5;margin-bottom:2px">🔴 รอดำเนินการ</div>
+      <div style="font-size:9px;color:#991b1b;margin-bottom:2px">🔴 รอดำเนินการ</div>
       <div style="font-size:16px;font-weight:600;color:#ef4444">${fmtM(t.PENALTYBAHT_TRACKB)}</div>
-      <div style="font-size:10px;color:#fca5a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.TICKETID||'').substring(0,16)}</div>
+      <div style="font-size:10px;color:#991b1b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.TICKETID||'').substring(0,16)}</div>
       <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.SUBJECT||'').substring(0,28)}</div>
     </div>`).join('');
 }
