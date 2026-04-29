@@ -1524,29 +1524,34 @@ function openTicket(ticket){
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 1 — Engineer กรอกข้อมูล</div>
+
         <div class="form-row" style="margin-bottom:12px">
           <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Group Problem</div>
-            <input class="form-input" id="f-group" placeholder="เช่น สายอากาศ, ONU" value="${ticket['Group problem']||''}"/>
+            <div style="font-size:11px;color:#f9a8d4;margin-bottom:4px;font-weight:600">🏷 Group Problem</div>
+            <select class="form-input" id="f-group" style="border-color:#f472b6">
+              <option value="">— เลือก Group Problem —</option>
+              ${buildGroupOptions(ticket['Group problem']||'')}
+            </select>
           </div>
           <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Sub Problem</div>
-            <input class="form-input" id="f-sub" placeholder="Sub Problem" value="${ticket['Sub Problem']||''}"/>
+            <div style="font-size:11px;color:#93c5fd;margin-bottom:4px;font-weight:600">🔍 Sub Problem</div>
+            <select class="form-input" id="f-sub" style="border-color:#3b82f6">
+              <option value="">— เลือก Sub Problem —</option>
+              ${buildSubOptions(ticket['Sub Problem']||'')}
+            </select>
           </div>
         </div>
         <div style="margin-bottom:12px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident (ถ้ามี)</div>
           <input class="form-input" id="f-accident" placeholder="Accident" value="${ticket.Accident||''}"/>
         </div>
-        <div style="margin-bottom:12px;background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:12px">
-          <div style="font-size:11px;color:#6ee7b7;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
-          <textarea class="form-textarea" id="f-overdue" style="margin-bottom:8px">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
-          <div style="font-size:11px;color:#6ee7b7;margin-bottom:4px">📷 แนบ LINK รูป (เพิ่มต่อท้าย AG)</div>
-          <input class="form-input" id="f-photo" placeholder="https://photos.app.goo.gl/..." value=""/>
-        </div>
         <div style="margin-bottom:12px;background:#1a2640;border:1px solid #253550;border-radius:8px;padding:12px">
           <div style="font-size:11px;color:#93c5fd;margin-bottom:6px;font-weight:600">🔗 แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
-          <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||''}"/>
+          <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||ticket['แนบ LINK ชี้แจง (AH)']||''}"/>
+        </div>
+        <div style="margin-bottom:12px;background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:#6ee7b7;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
+          <textarea class="form-textarea" id="f-overdue" style="margin-bottom:0">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
@@ -1818,7 +1823,6 @@ async function submitStep1(tid){
     sub_problem:    $('f-sub')?.value||'',
     accident:       $('f-accident')?.value||'',
     overdue_detail: $('f-overdue')?.value||'',
-    link_photo:     $('f-photo')?.value||'',
     link_evidence:  $('f-evidence')?.value||'',
   };
   await apiPost(`/api/ticket/${tid}/step1`, body);
@@ -2001,6 +2005,62 @@ function updateMobileNav(page){
   document.querySelectorAll('.mobile-nav-item').forEach(n=>{
     n.classList.toggle('active', n.dataset.mpage===page);
   });
+}
+
+
+// ── Group / Sub Problem dropdown options ──
+const GROUP_PROBLEM_OPTIONS = [
+  '1) Permission, Site Access',
+  '2) Accident (อุบัติเหตุ)',
+  '3) Diaster (ภัยพิบัติ)',
+  '4) Espionage,Stolen (การจารกรรม ถูกขโมย)',
+  '5) 3rd Party',
+  '6) Spare Part issue (ปัญหาอะไหล่)',
+  '7) WL Over Dimensioning',
+  '8) Others'
+];
+const SUB_PROBLEM_OPTIONS = [
+  '1.1) เจ้าของพื้นที่ไม่ให้เข้า',
+  '1.2) การไฟฟ้าไม่ให้เข้าพื้นที่',
+  '1.3) Renovate สถานที่',
+  '1.4) เข้าทำงานลำบาก',
+  '1.5) 3 จังหวัดภาคใต้, การสู้รบ',
+  '1.6) ประท้วง, จารจล',
+  '1.7) ไม่ปลอดภัยจากสัตว์, ต้นไม้สูง',
+  '1.8) อบรมปลอดภัยก่อน',
+  '2.1) รถชน, รถชนเสาไฟฟ้า',
+  '2.2) เสาไฟฟ้าล้ม',
+  '2.3) ต้นไม้ล้ม',
+  '3.1) ไฟไหม้ต้นไม้, สายสื่อสาร',
+  '3.2) น้ำท่วม',
+  '3.3) พายุ',
+  '3.4) ไฟดับวงกว้าง',
+  '4.1) ถูกขโมย',
+  '5.1) การไฟฟ้าตัดสาย ไม่แจ้งแผน',
+  '5.2) การไฟฟ้าตัดสาย มีแผนล่วงหน้า',
+  '5.3) ขอ Back office support',
+  '5.4) ผู้ให้บริการอื่น',
+  '5.5) ทรัพย์สินของเจ้าของพื้นที่',
+  '6.1) TRUE ไม่มี spare part ให้เพียงพอ',
+  '6.2) Spare part ในภูมิภาคไม่เพียงพอ',
+  '6.3) Spare part เสียหาย',
+  '7.1) ไม่มีทีมแก้ไข',
+  '7.2) สลับทำงานเหตุเสีย SA',
+  '7.3) สลับทำงานเหตุเสียสำคัญกว่า',
+  '8.1) Consolidate Project',
+  '8.2) Site รื้อถอน',
+  '8.3) Site ย้ายตำแหน่ง',
+  '8.4) อื่นๆ (ระบุ)'
+];
+function buildGroupOptions(current){
+  const cur = (current||'').trim();
+  const opts = GROUP_PROBLEM_OPTIONS.map(o=>`<option value="${o}"${cur===o?' selected':''}>${o}</option>`).join('');
+  return opts;
+}
+function buildSubOptions(current){
+  const cur = (current||'').trim();
+  const opts = SUB_PROBLEM_OPTIONS.map(o=>`<option value="${o}"${cur===o?' selected':''}>${o}</option>`).join('');
+  return opts;
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
