@@ -1701,23 +1701,23 @@ function openTicket(ticket){
         <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
           <!-- FSO KEY INFO — highlighted for decision making -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
-              <div style="font-size:10px;color:#94a3b8">Group Problem</div>
-              <div style="font-weight:600;color:var(--text)">${ticket['Group problem']||'—'}</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">Group Problem</div>
+              <div style="font-weight:600;color:#e2e8f0">${ticket['Group problem']||'—'}</div>
             </div>
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
-              <div style="font-size:10px;color:#94a3b8">Sub Problem ⭐</div>
-              <div style="font-weight:600;color:var(--accent2)">${ticket['Sub Problem']||'—'}</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">Sub Problem ⭐</div>
+              <div style="font-weight:600;color:#7dd3fc">${ticket['Sub Problem']||'—'}</div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
-              <div style="font-size:10px;color:#94a3b8">TARGETFINISH</div>
-              <div style="font-weight:500;color:var(--text)">${ticket.TARGETFINISH||'—'}</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">TARGETFINISH</div>
+              <div style="font-weight:500;color:#e2e8f0">${ticket.TARGETFINISH||'—'}</div>
             </div>
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
-              <div style="font-size:10px;color:#94a3b8">ACT_RESTORATIONDATE ⭐</div>
-              <div style="font-weight:600;color:var(--amber)">${ticket.ACT_RESTORATIONDATE||ticket.ACT_RESTORATIONDATE||'—'}</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">ACT_RESTORATIONDATE ⭐</div>
+              <div style="font-weight:600;color:#fb923c">${ticket.ACT_RESTORATIONDATE||ticket.ACT_RESTORATIONDATE||'—'}</div>
             </div>
           </div>
           <div style="background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:10px;margin-bottom:4px">
@@ -1913,7 +1913,7 @@ async function submitStep2(tid){
   const decision = $('f-fso-decision')?.value||'';
   if(!decision){ showToast('กรุณาเลือก ปรับ หรือ ไม่ปรับ','error'); return; }
   const body = { fso_decision: decision, remark: $('f-remark')?.value||'' };
-  optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision });
+  optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision, FINAL_RESULT: decision === 'ปรับ' ? 'ปรับ' : '' });
   closeModal();
   showToast('บันทึก Step 2 สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/step2`, body);
@@ -1958,7 +1958,7 @@ function optimisticUpdate(tid, patch){
 // Map endpoint → which fields change so we can patch locally
 function getPatchFromUrl(url, body){
   if(url.includes('/step1'))    return { STEP:'1', 'Group problem': body.group_problem||'', 'Sub Problem': body.sub_problem||'', 'Overdue Detail แนบLINK รูป': body.overdue_detail||'', 'แนบ LINK ชี้แจง': body.link_evidence||'' };
-  if(url.includes('/step2'))    return { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': body.fso_decision||'' };
+  if(url.includes('/step2'))    return { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': body.fso_decision||'', FINAL_RESULT: body.fso_decision||'' };
   if(url.includes('/defend/request')) return { STEP:'3' };
   if(url.includes('/defend/review'))  return { STEP:'3', FINAL_RESULT: body.decision||'' };
   if(url.includes('/accept'))   return { STEP:'4', FINAL_RESULT:'ปรับ' };
