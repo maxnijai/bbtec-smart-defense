@@ -246,7 +246,7 @@ def require_role(*roles):
 # -----------------------------------------
 # Audit Log
 # -----------------------------------------
-def write_audit(ticketid="", action="", detail="", step_from="", step_to=""):
+def log_audit_event(ticketid="", action="", detail="", step_from="", step_to=""):
     try:
         from flask import has_request_context
         user = session.get("user","") if has_request_context() else ""
@@ -453,7 +453,7 @@ def submit_step1(ticketid):
             COL_UPDATED_BY:     session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
-        write_audit(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')} Sub:{data.get('sub_problem','')}", "", "1")
+        log_audit_event(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')} Sub:{data.get('sub_problem','')}", "", "1")
         return jsonify({"success": True, "message": "บันทึก Step 1 สำเร็จ ยืนยันแล้วไม่สามารถแก้ไขได้"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -502,7 +502,7 @@ def submit_step2(ticketid):
             fields[COL_LOCKED]       = "TRUE"
 
         update_ticket_fields(sheet, headers, row_idx, fields)
-        write_audit(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", "4" if decision=="ไม่ปรับ" else "2")
+        log_audit_event(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", "4" if decision=="ไม่ปรับ" else "2")
         msg = "FSO ตัดสิน: ไม่ปรับ — Lock และส่ง Step 4 แล้ว" if decision == "ไม่ปรับ" else "FSO ตัดสิน: ปรับ — Engineer สามารถขอ Defend ได้"
         return jsonify({"success": True, "message": msg, "fso_decision": decision})
     except Exception as e:
@@ -561,7 +561,7 @@ def request_defend(ticketid):
             COL_UPDATED_BY:   session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
-        write_audit(ticketid, "DEFEND_REQUEST", f"ครั้งที่:{defend_count+1} เหตุผล:{defend_reason[:80]}", "2", "3")
+        log_audit_event(ticketid, "DEFEND_REQUEST", f"ครั้งที่:{defend_count+1} เหตุผล:{defend_reason[:80]}", "2", "3")
         return jsonify({
             "success": True,
             "message": f"ส่งคำขอ Defend ครั้งที่ {defend_count + 1} สำเร็จ",
@@ -656,7 +656,7 @@ def accept_penalty(ticketid):
             COL_UPDATED_BY:   session.get("user"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
-        write_audit(ticketid, "ACCEPT_PENALTY", "Engineer ยอมรับค่าปรับ", "2", "4")
+        log_audit_event(ticketid, "ACCEPT_PENALTY", "Engineer ยอมรับค่าปรับ", "2", "4")
         return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว — ส่ง Step 4 รอ Manager Approve"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -690,7 +690,7 @@ def manager_approve(ticketid):
             COL_REVIEWER:     session.get("name"),
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
-        write_audit(ticketid, "MANAGER_APPROVE", "อนุมัติขั้นตอนสุดท้าย", "4", "5")
+        log_audit_event(ticketid, "MANAGER_APPROVE", "อนุมัติขั้นตอนสุดท้าย", "4", "5")
         return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ ข้อมูลสมบูรณ์"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -827,7 +827,7 @@ def bulk_approve():
                       COL_LAST_UPDATED:now_str(), COL_UPDATED_BY:session.get("user"),
                       COL_REVIEWER:session.get("name")}
             update_ticket_fields(sheet, headers, row_idx, fields)
-            write_audit(tid, "BULK_APPROVE", "Manager Bulk Approve", "4", "5")
+            log_audit_event(tid, "BULK_APPROVE", "Manager Bulk Approve", "4", "5")
             success_list.append(tid)
         return jsonify({"success": True, "approved": len(success_list),
                         "failed": len(failed_list)})
