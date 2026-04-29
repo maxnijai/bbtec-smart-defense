@@ -1,11 +1,53 @@
 import os
 import json
 import hashlib
+import time
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, session, send_from_directory
 import gspread
 from google.oauth2.service_account import Credentials
+
+# ─────────────────────────────────────────────
+# In-memory cache (TTL-based, thread-safe)
+# ─────────────────────────────────────────────
+_cache = {}
+_cache_lock = threading.Lock()
+CACHE_TTL = 60  # seconds
+
+def cache_get(key):
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry and (time.time() - entry["ts"]) < CACHE_TTL:
+            return entry["data"]
+        return None
+
+def cache_set(key, data):
+    with _cache_lock:
+        _cache[key] = {"data": data, "ts": time.time()}
+
+def cache_invalidate_prefix(prefix):
+    with _cache_lock:
+        for k in [k for k in list(_cache.keys()) if k.startswith(prefix)]:
+            _cache.pop(k, None)
+
+# ─────────────────────────────────────────────
+# Exponential backoff for all Sheets API calls
+# ─────────────────────────────────────────────
+def sheets_retry(fn, *args, max_retries=5, **kwargs):
+    delay = 2
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            err = str(e)
+            if ("429" in err or "503" in err or "quota" in err.lower()) and attempt < max_retries - 1:
+                time.sleep(delay + attempt * 1.5)
+                delay = min(delay * 2, 32)
+            else:
+                raise
+    raise RuntimeError("sheets_retry: max retries exceeded")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("SECRET_KEY", "bbtec-smart-defense-2026")
@@ -138,7 +180,7 @@ def now_str():
 
 def rows_to_dicts(sheet):
     """Read sheet handling duplicate column names by renaming them."""
-    all_values = sheet.get_all_values()
+    all_values = sheets_retry(sheet.get_all_values)
     if not all_values:
         return []
     raw_headers = all_values[0]
@@ -163,13 +205,13 @@ def rows_to_dicts(sheet):
 def find_row_index(sheet, ticketid):
     """Return 1-based row index for a given TICKETID (header is row 1).
     Uses the FIRST column named TICKETID to avoid duplicate-header issues."""
-    headers = sheet.row_values(1)
-    tid_col = 1  # fallback to col A
+    headers = sheets_retry(sheet.row_values, 1)
+    tid_col = 1
     for i, h in enumerate(headers):
         if str(h).strip() == COL_TICKETID:
             tid_col = i + 1
             break
-    col_values = sheet.col_values(tid_col)
+    col_values = sheets_retry(sheet.col_values, tid_col)
     for i, val in enumerate(col_values):
         if str(val).strip() == str(ticketid).strip() and i > 0:
             return i + 1
@@ -184,29 +226,21 @@ def get_col_index(headers, col_name):
 def ensure_new_columns(sheet):
     """Add system columns if they don't exist yet.
     Uses batch update to avoid exceeding grid limits."""
-    headers = sheet.row_values(1)
+    headers = sheets_retry(sheet.row_values, 1)
     missing = [c for c in NEW_COLUMNS if c not in headers]
     if not missing:
         return headers
-
-    # How many columns does the sheet currently have?
-    # gspread sheet.col_count gives the actual grid width
     try:
         current_cols = sheet.col_count
     except Exception:
         current_cols = len(headers)
-
     needed = len(headers) + len(missing)
     if needed > current_cols:
-        # Resize the sheet to fit — adds blank columns
-        sheet.resize(cols=needed)
-
-    # Now write the missing headers
+        sheets_retry(sheet.resize, cols=needed)
     for col_name in missing:
         next_col = len(headers) + 1
-        sheet.update_cell(1, next_col, col_name)
+        sheets_retry(sheet.update_cell, 1, next_col, col_name)
         headers.append(col_name)
-
     return headers
 
 def update_ticket_fields(sheet, headers, row_idx, fields: dict):
@@ -214,7 +248,7 @@ def update_ticket_fields(sheet, headers, row_idx, fields: dict):
     for col_name, value in fields.items():
         col_idx = get_col_index(headers, col_name)
         if col_idx:
-            sheet.update_cell(row_idx, col_idx, value)
+            sheets_retry(sheet.update_cell, row_idx, col_idx, value)
 
 # ─────────────────────────────────────────────
 # Auth
@@ -368,7 +402,14 @@ def get_tickets():
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
         ensure_new_columns(sheet)
-        records = rows_to_dicts(sheet)
+
+        # ── Cache raw records (shared across all users, 60s TTL) ──
+        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
+        records = cache_get(CACHE_KEY)
+        if records is None:
+            records = rows_to_dicts(sheet)
+            cache_set(CACHE_KEY, records)
+
         role     = session.get("role")
         region   = session.get("region")
         province = session.get("province")
@@ -407,7 +448,12 @@ def get_tickets():
 def get_ticket(ticketid):
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
-        records = rows_to_dicts(sheet)
+        # Reuse cached records if available
+        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
+        records = cache_get(CACHE_KEY)
+        if records is None:
+            records = rows_to_dicts(sheet)
+            cache_set(CACHE_KEY, records)
         ticket = next((r for r in records if str(r.get(COL_TICKETID)) == ticketid), None)
         if not ticket:
             return jsonify({"error": "ไม่พบ Ticket"}), 404
@@ -470,6 +516,7 @@ def submit_step1(ticketid):
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
         log_audit_event(ticketid, "STEP1_SUBMIT", f"Group:{data.get('group_problem','')} Sub:{data.get('sub_problem','')}", "", "1")
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "message": "บันทึก Step 1 สำเร็จ ยืนยันแล้วไม่สามารถแก้ไขได้"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -520,6 +567,7 @@ def submit_step2(ticketid):
         update_ticket_fields(sheet, headers, row_idx, fields)
         log_audit_event(ticketid, "FSO_DECISION", f"ผล:{decision}", "1", "4" if decision=="ไม่ปรับ" else "2")
         msg = "FSO ตัดสิน: ไม่ปรับ — Lock และส่ง Step 4 แล้ว" if decision == "ไม่ปรับ" else "FSO ตัดสิน: ปรับ — Engineer สามารถขอ Defend ได้"
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "message": msg, "fso_decision": decision})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -643,6 +691,7 @@ def review_defend(ticketid):
             msg = f"FSO ยังตัดสิน ปรับ — Engineer สามารถขอ Defend ครั้งที่ {defend_count + 1} ได้ (เหลือ {2 - defend_count} ครั้ง)"
 
         update_ticket_fields(sheet, headers, row_idx, fields)
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "message": msg, "decision": decision, "defend_count": defend_count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -673,6 +722,7 @@ def accept_penalty(ticketid):
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
         log_audit_event(ticketid, "ACCEPT_PENALTY", "Engineer ยอมรับค่าปรับ", "2", "4")
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "message": "ยอมรับค่าปรับแล้ว — ส่ง Step 4 รอ Manager Approve"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -707,6 +757,7 @@ def manager_approve(ticketid):
         }
         update_ticket_fields(sheet, headers, row_idx, fields)
         log_audit_event(ticketid, "MANAGER_APPROVE", "อนุมัติขั้นตอนสุดท้าย", "4", "5")
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ ข้อมูลสมบูรณ์"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -719,7 +770,12 @@ def manager_approve(ticketid):
 def dashboard_summary():
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
-        records = rows_to_dicts(sheet)
+        # Reuse cached records (shared with get_tickets, 60s TTL)
+        CACHE_KEY = "tickets:NOR_Penalty_Ticket"
+        records = cache_get(CACHE_KEY)
+        if records is None:
+            records = rows_to_dicts(sheet)
+            cache_set(CACHE_KEY, records)
         # Dashboard shows ALL data regardless of user province — no filter here
         # (province filter only applies to Ticket page)
 
@@ -845,6 +901,7 @@ def bulk_approve():
             update_ticket_fields(sheet, headers, row_idx, fields)
             log_audit_event(tid, "BULK_APPROVE", "Manager Bulk Approve", "4", "5")
             success_list.append(tid)
+        cache_invalidate_prefix("tickets:")
         return jsonify({"success": True, "approved": len(success_list),
                         "failed": len(failed_list)})
     except Exception as e:
@@ -853,6 +910,26 @@ def bulk_approve():
 @app.route("/system-flow.png")
 def serve_sysflow():
     return send_from_directory(app.static_folder, "system-flow.png")
+
+# ─────────────────────────────────────────────
+# Cache management endpoints
+# ─────────────────────────────────────────────
+@app.route("/api/cache/refresh", methods=["POST"])
+@login_required
+def cache_refresh():
+    """Force-clear ticket cache so next request re-fetches from Sheets."""
+    cache_invalidate_prefix("tickets:")
+    return jsonify({"success": True, "message": "Cache cleared — next load will fetch fresh data"})
+
+@app.route("/api/cache/status")
+@login_required
+def cache_status():
+    """Show current cache state (age of each entry)."""
+    with _cache_lock:
+        now = time.time()
+        status = {k: {"age_sec": round(now - v["ts"]), "ttl_remaining": max(0, round(CACHE_TTL - (now - v["ts"])))}
+                  for k, v in _cache.items()}
+    return jsonify({"cache": status, "ttl": CACHE_TTL})
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
