@@ -5,8 +5,28 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>BBTEC Smart Defense</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @media(max-width:768px){
+    .sidebar{display:none!important}
+    .main{width:100%!important}
+    .kpi-grid,.charts-grid{grid-template-columns:1fr 1fr!important}
+    .topbar{padding:10px 14px!important}
+    td,th{padding:6px 8px!important;font-size:11px!important}
+    .modal{width:96vw!important;margin:10px!important;padding:16px!important}
+    .detail-grid{grid-template-columns:1fr!important}
+    .form-row{grid-template-columns:1fr!important}
+    #page-dashboard{overflow-y:auto!important;height:auto!important}
+    .mobile-nav{display:flex!important}
+  }
+  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;
+    background:var(--bg2);border-top:1px solid var(--border);z-index:50;padding:6px 0}
+  .mobile-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;
+    font-size:10px;color:var(--muted);cursor:pointer;padding:4px 0}
+  .mobile-nav-item.active{color:var(--accent)}
+  .mobile-nav-icon{font-size:18px;margin-bottom:2px}
+  .cb-ticket{width:14px;height:14px;cursor:pointer;accent-color:var(--accent)}
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
     --bg:#0b1220;
@@ -441,8 +461,13 @@
       <div id="tickets-kpi" style="margin-bottom:14px"></div>
       <div class="table-wrap">
         <div class="table-header" style="flex-wrap:wrap;gap:8px">
-          <div class="table-title">รายการ Ticket ทั้งหมด</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="checkbox" class="cb-ticket" id="cb-all" title="เลือกทั้งหมด" onchange="toggleSelectAll(this)"/>
+            <div class="table-title">รายการ Ticket ทั้งหมด</div>
+            <button class="btn-action btn-sm-green" id="btn-bulk-approve" style="display:none" onclick="doBulkApprove()">✓ Approve ที่เลือก (<span id="selected-count">0</span>)</button>
+          </div>
           <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-left:auto">
+            <button class="btn-action" onclick="exportExcel()" title="Export Excel">📥 Excel</button>
             <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID / Subject..." oninput="filterTickets()"/>
             <select class="filter-select" id="filter-province" onchange="filterTickets()">
               <option value="">ทุก Province</option>
@@ -467,6 +492,7 @@
         <table id="ticket-table" style="display:none">
           <thead>
             <tr>
+              <th style="width:32px"><input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/></th>
               <th class="sortable" data-col="TICKETID" onclick="sortTable('TICKETID')">TICKET ID <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="SUBJECT" onclick="sortTable('SUBJECT')">Subject <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="TrackB_Region" onclick="sortTable('TrackB_Region')">Province <span class="sort-icon">⇅</span></th>
@@ -512,6 +538,22 @@
   </div>
 </div>
 
+<!-- Mobile Bottom Nav -->
+<div class="mobile-nav" id="mobile-nav">
+  <div class="mobile-nav-item active" onclick="showPage('dashboard')" data-mpage="dashboard">
+    <div class="mobile-nav-icon">📊</div><div>Dashboard</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('tickets')" data-mpage="tickets">
+    <div class="mobile-nav-icon">🎫</div><div>Tickets</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('my-tickets')" data-mpage="my-tickets">
+    <div class="mobile-nav-icon">📋</div><div>งานฉัน</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('charts')" data-mpage="charts">
+    <div class="mobile-nav-icon">📈</div><div>รายงาน</div>
+  </div>
+</div>
+
 <!-- DETAIL MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" id="modal-box">
@@ -529,6 +571,7 @@
 <script>
 const API = '';
 let allTickets = [];
+let allTicketsRaw = [];  // unfiltered, for dashboard pivot
 let charts = {};
 let currentUser = null;
 
@@ -601,6 +644,8 @@ function initApp(user){
   dash.classList.add('active','flex-page');
   loadDashboard();
   loadTickets();
+  // Auto-init audit sheet
+  fetch(`${API}/api/audit/init`,{credentials:'include'}).catch(()=>{});
 }
 
 // ── Navigation ──
@@ -620,6 +665,7 @@ function showPage(page){
   $('topbar-title').textContent = titles[page] || page;
   if(page==='charts') renderCharts();
   if(page==='my-tickets') renderMyTickets();
+  updateMobileNav(page);
 }
 
 // ── Dashboard ──
@@ -633,7 +679,8 @@ async function loadDashboard(){
     renderKPI(d);
     renderFsoChart(d);
     renderBahtChart(d);
-    if(allTickets.length) renderPivotTable(allTickets);
+    if(allTicketsRaw.length) renderPivotTable(allTicketsRaw);
+    renderTop5();
   } catch(e){
     $('dashboard-loading').textContent = 'โหลดข้อมูลไม่สำเร็จ';
   }
@@ -642,7 +689,10 @@ async function loadDashboard(){
 function goToTicketsFiltered(step, result){
   showPage('tickets');
   // Reset filters first
-  if($('filter-step')) $('filter-step').value = step !== undefined ? String(step) : '';
+  if($('filter-step')){
+    if(step === 'any' || step === undefined) $('filter-step').value = '';
+    else $('filter-step').value = String(step);
+  }
   if($('filter-result')) $('filter-result').value = result !== undefined ? result : '';
   // Don't reset province — keep user's locked province
   if(allTickets.length > 0){
@@ -885,6 +935,7 @@ async function loadTickets(){
   try {
     const res = await fetch(`${API}/api/tickets`,{credentials:'include'});
     const data = await res.json();
+    allTicketsRaw = data.tickets || [];  // keep unfiltered copy for pivot
     allTickets = (data.tickets || []).sort((a,b)=>{
       const av = parseFloat(String(a.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
       const bv = parseFloat(String(b.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
@@ -928,9 +979,13 @@ async function loadTickets(){
         });
       }
     }
-    renderTicketTable(getFilteredTickets());
-    renderTicketsKPI(getFilteredTickets());
-    renderPivotTable(allTickets);
+    renderTop5();  // update top5 after tickets load
+    // Render with slight delay to ensure province select is fully set
+    setTimeout(()=>{
+      renderTicketTable(getFilteredTickets());
+      renderTicketsKPI(getFilteredTickets());
+      renderPivotTable(allTicketsRaw);
+    }, 50);
   } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ'; reject(e); }
   resolve();
   });
@@ -1007,6 +1062,7 @@ function renderTicketTable(tickets){
   });
   tbody.innerHTML = sorted.slice(0,300).map(t => `
     <tr>
+      <td><input type="checkbox" class="cb-ticket ticket-cb" data-id="${t.TICKETID||''}" onchange="updateBulkBtn()"/></td>
       <td><span class="tid">${t.TICKETID||'—'}</span></td>
       <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.SUBJECT||'').replace(/"/g,'')}">${t.SUBJECT||'—'}</td>
       <td style="white-space:nowrap">${t.TrackB_Region||'—'}</td>
@@ -1045,7 +1101,7 @@ function renderTicketsKPI(tickets){
         <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(total)}</div>
         <div style="font-size:10px;color:var(--muted)">tickets</div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('1','')">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('any','')">
         <div style="font-size:10px;color:var(--muted)">Reviewed</div>
         <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(reviewed)}</div>
         <div style="font-size:10px;color:var(--muted)">${total?Math.round(reviewed/total*100):0}% actual</div>
@@ -1317,12 +1373,51 @@ function renderCharts(){
         '</div>' +
       '</div>' +
       '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚔️ Defend Success Rate by Group</div>' +
+        '<canvas id="chart-defend-rate" height="200"></canvas>' +
+      '</div>' +
+      '<div class="chart-card">' +
         '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม</div>' +
         '<div style="display:flex;flex-direction:column;gap:6px">' + barsHTML +
           '<div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">รอดำเนินการทั้งหมด: <b style="color:var(--amber)">'+fmtN(total-reviewed)+'</b> tickets</div>' +
         '</div>' +
       '</div>' +
     '</div>';
+
+  // Defend Rate by Group chart
+  setTimeout(function(){
+    const drCanvas = $('chart-defend-rate');
+    if(drCanvas && window.Chart){
+      if(drCanvas._chart) drCanvas._chart.destroy();
+      const grpMap = {};
+      t.forEach(x=>{
+        const g = (x.TRUEOWNERGROUP||'Unknown').replace('TRUE-TH-BBT-','').replace('-NOP','');
+        if(!grpMap[g]) grpMap[g]={total:0,won:0};
+        const dc = parseInt(x.DEFEND_COUNT||0);
+        if(dc>0){ grpMap[g].total++; if(x.FINAL_RESULT==='ไม่ปรับ') grpMap[g].won++; }
+      });
+      const grps = Object.entries(grpMap).filter(([,v])=>v.total>0)
+        .sort((a,b)=>b[1].total-a[1].total).slice(0,8);
+      drCanvas._chart = new Chart(drCanvas,{
+        type:'bar',
+        data:{
+          labels: grps.map(([g])=>g),
+          datasets:[
+            {label:'สำเร็จ',data:grps.map(([,v])=>v.won),backgroundColor:'#10b981',borderWidth:0,borderRadius:3},
+            {label:'ไม่สำเร็จ',data:grps.map(([,v])=>v.total-v.won),backgroundColor:'#ef4444',borderWidth:0,borderRadius:3}
+          ]
+        },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:10}}}},
+          scales:{
+            x:{stacked:true,ticks:{color:'#8aa0c0',font:{size:9}},grid:{display:false}},
+            y:{stacked:true,ticks:{color:'#8aa0c0',font:{size:9}},grid:{color:'#253550'}}
+          }
+        }
+      });
+    }
+  },150);
 
   setTimeout(function(){
     const c = $('chart-exec-baht');
@@ -1380,6 +1475,8 @@ function openTicket(ticket){
   ).trim();
 
   $('modal-tid').textContent = `🎫 ${ticket.TICKETID}`;
+  // Load audit log async
+  loadAuditLog(ticket.TICKETID);
 
   // Step progress
   const spHTML = [1,2,3,4,5].map((s,i) => {
@@ -1628,6 +1725,10 @@ function openTicket(ticket){
       </div>` : ''}
     </div>
     ${formHTML}
+    <div id="audit-timeline" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px">📋 ประวัติการดำเนินการ</div>
+      <div id="audit-list" style="font-size:11px;color:var(--muted)">กำลังโหลด...</div>
+    </div>
   `;
   $('modal-overlay').classList.add('open');
 }
@@ -1734,6 +1835,140 @@ async function apiPost(url, body){
 }
 
 // ── Auto-check session on load ──
+// ── Export Excel ──
+function exportExcel(){
+  const filtered = getFilteredTickets();
+  if(!filtered.length){ showToast('ไม่มีข้อมูลที่จะ export','error'); return; }
+  const cols = ['TICKETID','SUBJECT','TrackB_Region','PENALTYBAHT_TRACKB',
+    'FSO พิจารณา (ปรับ/ไม่ปรับ)','STEP','FINAL_RESULT','Owner',
+    'Group problem','Sub Problem','LAST_UPDATED','UPDATED_BY'];
+  const ws_data = [cols, ...filtered.map(t=>cols.map(c=>t[c]||''))];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  ws['!cols'] = cols.map(c=>({wch:Math.max(c.length+2,15)}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
+  const date = new Date().toLocaleDateString('th-TH').replace(/\//g,'-');
+  XLSX.writeFile(wb, `SmartDefense_${date}.xlsx`);
+  showToast(`Export ${filtered.length} tickets สำเร็จ`,'success');
+}
+
+// ── Checkbox & Bulk Approve ──
+function toggleSelectAll(cb){
+  document.querySelectorAll('.ticket-cb').forEach(c=>c.checked=cb.checked);
+  updateBulkBtn();
+}
+function updateBulkBtn(){
+  const checked = document.querySelectorAll('.ticket-cb:checked').length;
+  const btn = $('btn-bulk-approve');
+  const cnt = $('selected-count');
+  if(btn){ btn.style.display = checked>0 ? 'inline-block' : 'none'; }
+  if(cnt){ cnt.textContent = checked; }
+  const cbAll = $('cb-all');
+  const cbHead = $('cb-head');
+  const all = document.querySelectorAll('.ticket-cb').length;
+  if(cbAll) cbAll.indeterminate = checked>0 && checked<all;
+  if(cbHead) cbHead.indeterminate = checked>0 && checked<all;
+}
+async function doBulkApprove(){
+  const ids = [...document.querySelectorAll('.ticket-cb:checked')].map(c=>c.dataset.id);
+  if(!ids.length) return;
+  if(!confirm(`Approve ${ids.length} tickets?`)) return;
+  try {
+    const res = await fetch(`${API}/api/tickets/bulk-approve`,{
+      method:'POST',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ticket_ids:ids})
+    });
+    const d = await res.json();
+    if(d.success){
+      showToast(`Approve สำเร็จ ${d.approved} tickets`,'success');
+      loadTickets(); loadDashboard();
+    } else showToast(d.error||'error','error');
+  } catch(e){ showToast('ไม่สามารถเชื่อมต่อ','error'); }
+}
+
+// ── Audit Timeline ──
+async function loadAuditLog(ticketid){
+  const el = $('audit-list');
+  if(!el) return;
+  try {
+    const res = await fetch(`${API}/api/ticket/${ticketid}/audit`,{credentials:'include'});
+    const d = await res.json();
+    if(!d.logs||!d.logs.length){
+      el.innerHTML = '<span style="color:var(--muted)">ยังไม่มีประวัติ</span>'; return;
+    }
+    const actionLabel = {
+      'STEP1_SUBMIT':'📝 Engineer กรอก Step 1',
+      'FSO_DECISION':'🔵 FSO ตัดสิน',
+      'DEFEND_REQUEST':'⚔️ ขอ Defend',
+      'DEFEND_REVIEW':'🔄 FSO พิจารณา Defend',
+      'ACCEPT_PENALTY':'✋ ยอมรับค่าปรับ',
+      'MANAGER_APPROVE':'✅ Manager Approve',
+      'BULK_APPROVE':'✅ Bulk Approve',
+    };
+    el.innerHTML = d.logs.map(l=>`
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <div style="flex-shrink:0;width:4px;background:var(--accent);border-radius:2px"></div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+            <span style="font-weight:500;color:var(--text)">${actionLabel[l.action]||l.action}</span>
+            <span style="color:var(--muted);font-size:10px">${l.timestamp}</span>
+          </div>
+          <div style="color:var(--muted)">${l.name||l.user} (${l.role})</div>
+          ${l.detail?`<div style="color:var(--text);margin-top:2px;font-size:11px">${l.detail}</div>`:''}
+          ${l.step_to?`<div style="margin-top:2px"><span class="badge badge-${l.step_to}">${'Step '+l.step_to}</span></div>`:''}
+        </div>
+      </div>`).join('');
+  } catch(e){
+    if(el) el.innerHTML = '<span style="color:var(--muted)">โหลดไม่สำเร็จ</span>';
+  }
+}
+
+// ── Filter by owner group (pivot click) ──
+function filterByOwnerGroup(grp){
+  showPage('tickets');
+  const pSel = $('filter-province');
+  if(pSel && !pSel.disabled){
+    // Find matching option or add temporary
+    let found = false;
+    for(let o of pSel.options){ if(o.value===grp){pSel.value=grp;found=true;break;} }
+    if(!found){
+      const o = document.createElement('option');
+      o.value=grp; o.textContent=grp.replace('TRUE-TH-BBT-','').replace('-NOP','');
+      pSel.appendChild(o); pSel.value=grp;
+    }
+  }
+  filterTickets();
+}
+
+// ── Top 5 Pending ──
+function renderTop5(){
+  const el = $('top5-bar');
+  if(!el||!allTicketsRaw.length) return;
+  const pending = allTicketsRaw
+    .filter(t=>!t.FINAL_RESULT&&(!t.STEP||t.STEP==='0'||t.STEP==='1'||t.STEP==='2'))
+    .sort((a,b)=>(parseFloat(String(b.PENALTYBAHT_TRACKB||0).replace(/,/g,''))||0)
+               -(parseFloat(String(a.PENALTYBAHT_TRACKB||0).replace(/,/g,''))||0))
+    .slice(0,5);
+  if(!pending.length){ el.style.display='none'; return; }
+  const fmtM = n=>{const v=Number(n||0);return v>=1000000?(v/1000000).toFixed(1)+'M':Number(v).toLocaleString('th-TH');};
+  el.innerHTML = pending.map(t=>`
+    <div style="background:#3d1a1a;border:1px solid #ef4444;border-radius:8px;padding:8px 10px;cursor:pointer"
+         onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
+      <div style="font-size:9px;color:#fca5a5;margin-bottom:2px">🔴 รอดำเนินการ</div>
+      <div style="font-size:16px;font-weight:600;color:#ef4444">${fmtM(t.PENALTYBAHT_TRACKB)}</div>
+      <div style="font-size:10px;color:#fca5a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.TICKETID||'').substring(0,16)}</div>
+      <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.SUBJECT||'').substring(0,28)}</div>
+    </div>`).join('');
+}
+
+// ── Mobile nav update ──
+function updateMobileNav(page){
+  document.querySelectorAll('.mobile-nav-item').forEach(n=>{
+    n.classList.toggle('active', n.dataset.mpage===page);
+  });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   try {
     const res = await fetch(`${API}/api/me`,{credentials:'include'});
