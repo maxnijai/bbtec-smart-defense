@@ -395,6 +395,9 @@
 
     <div class="nav-section">
       <div class="nav-label">หลัก</div>
+      <div class="nav-item" onclick="showPage('sysflow')" data-page="sysflow">
+        <span class="nav-icon">🗺</span> System Flow
+      </div>
       <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
         <span class="nav-icon">📊</span> Dashboard
       </div>
@@ -404,9 +407,7 @@
       <div class="nav-item" onclick="showPage('charts')" data-page="charts">
         <span class="nav-icon">📈</span> รายงาน / กราฟ
       </div>
-      <div class="nav-item" onclick="showPage('sysflow')" data-page="sysflow">
-        <span class="nav-icon">🗺</span> System Flow
-      </div>
+
     </div>
 
     <div class="nav-section" id="nav-workflow">
@@ -554,18 +555,26 @@
                title="คลิกเพื่อดูขนาดเต็ม"/>
         </div>
         <div style="padding:12px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;border-top:1px solid var(--border)">
-          ${['Step 1 — Engineer Zone / Site Sup Review',
-             'Step 2 — FSO Zone Review',
-             'Step 3 — Defend Process (สูงสุด 2 ครั้ง)',
-             'Step 4 — Final Result',
-             'Step 5 — Manager Approve NOR1/NOR2'
-          ].map((s,i)=>{
-            const colors=['#f59e0b','#3b82f6','#ef4444','#10b981','#a78bfa'];
-            return `<div style="background:var(--bg3);border-left:3px solid ${colors[i]};border-radius:6px;padding:8px 10px">
-              <div style="font-size:10px;color:var(--muted)">STEP ${i+1}</div>
-              <div style="font-size:11px;font-weight:500;color:var(--text)">${s.split('—')[1]?.trim()||''}</div>
-            </div>`;
-          }).join('')}
+          <div style="background:var(--bg3);border-left:3px solid #f59e0b;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 1</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Engineer Zone / Site Sup</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #3b82f6;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 2</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">FSO Zone Review</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #ef4444;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 3</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Defend Process (2 ครั้ง)</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #10b981;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 4</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Final Result</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #a78bfa;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 5</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Manager Approve NOR1/2</div>
+          </div>
         </div>
       </div>
     </div>
