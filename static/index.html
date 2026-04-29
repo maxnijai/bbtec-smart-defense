@@ -726,21 +726,53 @@ function showPage(page){
 }
 
 // ── Dashboard ──
-async function loadDashboard(){
-  try {
-    const res = await fetch(`${API}/api/dashboard/summary`,{credentials:'include'});
-    const d = await res.json();
-    if(d.error){ $('dashboard-loading').textContent = d.error; return; }
-    $('dashboard-loading').style.display='none';
-    $('dashboard-content').style.display='flex';
-    renderKPI(d);
-    renderFsoChart(d);
-    renderBahtChart(d);
-    if(allTicketsRaw.length) renderPivotTable(allTicketsRaw);
-    renderTop5();
-  } catch(e){
-    $('dashboard-loading').textContent = 'โหลดข้อมูลไม่สำเร็จ';
+// ── Fetch with auto-retry on 429 ──
+async function fetchWithRetry(url, opts={}, maxRetries=4){
+  let delay = 2000;
+  for(let i=0; i<maxRetries; i++){
+    try {
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      // If 429 quota error — wait and retry
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(i < maxRetries-1){
+          showToast(`⏳ API เกิน quota รอ ${Math.round(delay/1000)}s แล้ว retry...`, 'info');
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 30000);
+          continue;
+        }
+      }
+      return data;
+    } catch(e){
+      if(i < maxRetries-1){
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 30000);
+      }
+    }
   }
+  return { error: 'ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่' };
+}
+
+async function loadDashboard(){
+  const el = $('dashboard-loading');
+  if(el){ el.innerHTML = '<div class="spinner"></div> กำลังโหลดข้อมูล...'; el.style.display='flex'; }
+  const d = await fetchWithRetry(`${API}/api/dashboard/summary`, {credentials:'include'});
+  if(d.error){
+    if(el) el.innerHTML = `
+      <div style="text-align:center;padding:32px">
+        <div style="font-size:13px;color:var(--red);margin-bottom:12px">⚠️ โหลดข้อมูลไม่สำเร็จ</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:16px">กรุณารอสักครู่แล้วลองใหม่</div>
+        <button onclick="loadDashboard()" style="padding:6px 18px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:12px">🔄 ลองใหม่</button>
+      </div>`;
+    return;
+  }
+  if(el){ el.style.display='none'; }
+  $('dashboard-content').style.display='flex';
+  renderKPI(d);
+  renderFsoChart(d);
+  renderBahtChart(d);
+  if(allTicketsRaw.length) renderPivotTable(allTicketsRaw);
+  renderTop5();
 }
 
 function goToTicketsFiltered(step, result){
@@ -990,9 +1022,17 @@ let sortDir = 'desc';
 async function loadTickets(){
   return new Promise(async (resolve, reject) => {
   try {
-    const res = await fetch(`${API}/api/tickets`,{credentials:'include'});
-    const data = await res.json();
-    allTicketsRaw = data.tickets || [];  // keep unfiltered copy for pivot
+    const data = await fetchWithRetry(`${API}/api/tickets`, {credentials:'include'});
+    if(data.error){
+      const el = $('tickets-loading');
+      if(el) el.innerHTML = `
+        <div style="text-align:center;padding:24px">
+          <div style="font-size:13px;color:var(--red);margin-bottom:10px">⚠️ โหลด Ticket ไม่สำเร็จ</div>
+          <button onclick="loadTickets()" style="padding:5px 16px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:12px">🔄 ลองใหม่</button>
+        </div>`;
+      reject(data.error); return;
+    }
+    allTicketsRaw = data.tickets || [];
     allTickets = (data.tickets || []).sort((a,b)=>{
       const av = parseFloat(String(a.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
       const bv = parseFloat(String(b.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
