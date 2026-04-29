@@ -1277,7 +1277,8 @@ function renderPivotTable(tickets){
     });
     const rpct = regT.total ? Math.round(regT.step1/regT.total*100) : 0;
     rows += `<tr class="region-row">
-      <td colspan="2">🔷 ${reg} รวม</td>
+      <td>🔷</td>
+      <td>${reg} รวม</td>
       <td>${fmt(regT.total)}</td>
       <td>${fmt(regT.step1)}</td>
       <td>${pctBadge(rpct)}</td>
@@ -1294,7 +1295,8 @@ function renderPivotTable(tickets){
 
   const gpct = grandTotal.total ? Math.round(grandTotal.step1/grandTotal.total*100) : 0;
   rows += `<tr class="total-row">
-    <td colspan="2">⭐ ผลรวม NOR1+NOR2</td>
+    <td>⭐</td>
+    <td>ผลรวม NOR1+NOR2</td>
     <td>${fmt(grandTotal.total)}</td>
     <td>${fmt(grandTotal.step1)}</td>
     <td>${pctBadge(gpct)}</td>
