@@ -242,10 +242,8 @@ def require_role(*roles):
 # ─────────────────────────────────────────────
 # Routes — Auth
 # ─────────────────────────────────────────────
-@app.route("/api/login", methods=["POST"])
-# -----------------------------------------
-# Audit Log
-# -----------------------------------------
+# Audit helper (NOT a route — just a helper function)
+# ─────────────────────────────────────────────
 def log_audit_event(ticketid="", action="", detail="", step_from="", step_to=""):
     try:
         from flask import has_request_context
@@ -259,40 +257,9 @@ def log_audit_event(ticketid="", action="", detail="", step_from="", step_to="")
             str(step_from), str(step_to),
         ], value_input_option="USER_ENTERED")
     except Exception:
-        pass  # Audit MUST never crash workflow
+        pass
 
-@app.route("/api/ticket/<ticketid>/audit")
-@login_required
-def get_audit(ticketid):
-    try:
-        sheet = get_sheet("SD_AUDIT_LOG")
-        rows = sheet.get_all_values()
-        logs = []
-        for r in rows[1:]:
-            if len(r) >= 5 and r[4] == ticketid:
-                logs.append({"timestamp":r[0],"user":r[1],"name":r[2],"role":r[3],
-                    "action":r[5] if len(r)>5 else "","detail":r[6] if len(r)>6 else "",
-                    "step_from":r[7] if len(r)>7 else "","step_to":r[8] if len(r)>8 else ""})
-        logs.reverse()
-        return jsonify({"logs": logs})
-    except Exception as e:
-        return jsonify({"logs": [], "error": str(e)})
-
-@app.route("/api/audit/init")
-@login_required
-def init_audit_sheet():
-    try:
-        gc = get_gc()
-        wb = gc.open_by_key(SPREADSHEET_ID)
-        try:
-            wb.worksheet("SD_AUDIT_LOG")
-        except Exception:
-            ws = wb.add_worksheet("SD_AUDIT_LOG", rows=5000, cols=9)
-            ws.append_row(["TIMESTAMP","USER","NAME","ROLE","TICKETID","ACTION","DETAIL","STEP_FROM","STEP_TO"])
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
+@app.route("/api/login", methods=["POST"])
 def login():
     data = request.json or {}
     username = data.get("username", "").strip()
@@ -346,6 +313,43 @@ def me():
 # ─────────────────────────────────────────────
 # Routes — Tickets
 # ─────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────
+# Audit Routes
+# ─────────────────────────────────────────────
+@app.route("/api/ticket/<ticketid>/audit")
+@login_required
+def get_audit_log(ticketid):
+    try:
+        sheet = get_sheet("SD_AUDIT_LOG")
+        rows = sheet.get_all_values()
+        logs = []
+        for r in rows[1:]:
+            if len(r) >= 5 and r[4] == ticketid:
+                logs.append({"timestamp":r[0],"user":r[1],"name":r[2],"role":r[3],
+                    "action":r[5] if len(r)>5 else "","detail":r[6] if len(r)>6 else "",
+                    "step_from":r[7] if len(r)>7 else "","step_to":r[8] if len(r)>8 else ""})
+        logs.reverse()
+        return jsonify({"logs": logs})
+    except Exception as e:
+        return jsonify({"logs": [], "error": str(e)})
+
+@app.route("/api/audit/init")
+@login_required
+def init_audit_sheet():
+    try:
+        gc = get_gc()
+        wb = gc.open_by_key(SPREADSHEET_ID)
+        try:
+            wb.worksheet("SD_AUDIT_LOG")
+        except Exception:
+            ws = wb.add_worksheet("SD_AUDIT_LOG", rows=5000, cols=9)
+            ws.append_row(["TIMESTAMP","USER","NAME","ROLE","TICKETID","ACTION","DETAIL","STEP_FROM","STEP_TO"])
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/api/tickets")
 @login_required
 def get_tickets():
