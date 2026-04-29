@@ -197,11 +197,16 @@
   th.sort-asc .sort-icon::after{content:'↑';opacity:1}
   th.sort-desc .sort-icon::after{content:'↓';opacity:1}
   /* Pivot table styles */
-  .pivot-table{width:100%;border-collapse:collapse;font-size:11px}
-  .pivot-table th{padding:7px 10px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
-  .pivot-table th:first-child,.pivot-table th:nth-child(2){text-align:left}
-  .pivot-table td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-size:11px}
-  .pivot-table td:first-child{font-size:10px;color:var(--muted);text-align:left;padding-left:20px}
+  .pivot-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+  .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pivot-table th:first-child{text-align:left;width:52px}
+  .pivot-table th:nth-child(2){text-align:left;width:110px}
+  .pivot-table th:nth-child(3),.pivot-table th:nth-child(4){width:60px}
+  .pivot-table th:nth-child(5){width:72px} /* %S1 */
+  .pivot-table th:nth-child(6),.pivot-table th:nth-child(7),.pivot-table th:nth-child(8),.pivot-table th:nth-child(9),.pivot-table th:nth-child(10){width:58px}
+  .pivot-table th:nth-child(11),.pivot-table th:nth-child(12){width:78px}
+  .pivot-table td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:right;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pivot-table td:first-child{font-size:10px;color:var(--muted);text-align:left;padding-left:12px}
   .pivot-table td:nth-child(2){text-align:left;font-weight:500;color:var(--text)}
   .pivot-table tr.region-row td{background:var(--bg3);font-weight:700;color:var(--accent2);font-size:11px}
   .pivot-table tr.region-row td:first-child{padding-left:8px}
@@ -211,6 +216,13 @@
   .pivot-table .num-amber{color:#f59e0b;font-weight:600}
   .pivot-table .num-blue{color:#93c5fd;font-weight:600}
   .pivot-table .pct{font-size:10px;color:var(--muted)}
+  /* %S1 heat badge */
+  .pct-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;min-width:42px;text-align:center}
+  .pct-0{background:rgba(239,68,68,.15);color:#ef4444}
+  .pct-low{background:rgba(245,158,11,.15);color:#f59e0b}
+  .pct-mid{background:rgba(59,130,246,.18);color:#93c5fd}
+  .pct-high{background:rgba(16,185,129,.18);color:#10b981}
+  .pct-full{background:rgba(167,139,250,.18);color:#a78bfa}
   table{width:100%;border-collapse:collapse}
   th{
     padding:10px 14px;text-align:left;font-size:11px;font-weight:500;
@@ -1219,6 +1231,16 @@ function renderPivotTable(tickets){
     if(t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
   });
 
+  // %S1 heat badge: 0%=red, 1-30%=amber, 31-70%=blue, 71-99%=green, 100%=purple
+  function pctBadge(pct){
+    let cls = 'pct-0';
+    if(pct===100) cls='pct-full';
+    else if(pct>=71) cls='pct-high';
+    else if(pct>=31) cls='pct-mid';
+    else if(pct>=1) cls='pct-low';
+    return `<span class="pct-badge ${cls}">${pct}%</span>`;
+  }
+
   let rows = `<table class="pivot-table">
     <thead><tr>
       <th>Region</th>
@@ -1249,7 +1271,7 @@ function renderPivotTable(tickets){
         <td style="font-size:10px">${grp.replace('TRUE-TH-BBT-','').replace('-NOP','')}</td>
         <td>${fmt(d.total)}</td>
         <td class="num-amber">${fmt(d.step1)}</td>
-        <td class="pct">${pct}%</td>
+        <td>${pctBadge(pct)}</td>
         <td class="num-blue">${fmt(d.step2)}</td>
         <td class="num-amber">${fmt(d.defend)}</td>
         <td class="num-red">${fmt(d.final_penalty)}</td>
@@ -1264,7 +1286,7 @@ function renderPivotTable(tickets){
       <td colspan="2">🔷 ${reg} รวม</td>
       <td>${fmt(regT.total)}</td>
       <td>${fmt(regT.step1)}</td>
-      <td>${rpct}%</td>
+      <td>${pctBadge(rpct)}</td>
       <td>${fmt(regT.step2)}</td>
       <td>${fmt(regT.defend)}</td>
       <td>${fmt(regT.final_penalty)}</td>
@@ -1281,7 +1303,7 @@ function renderPivotTable(tickets){
     <td colspan="2">⭐ ผลรวม NOR1+NOR2</td>
     <td>${fmt(grandTotal.total)}</td>
     <td>${fmt(grandTotal.step1)}</td>
-    <td>${gpct}%</td>
+    <td>${pctBadge(gpct)}</td>
     <td>${fmt(grandTotal.step2)}</td>
     <td>${fmt(grandTotal.defend)}</td>
     <td>${fmt(grandTotal.final_penalty)}</td>
