@@ -475,7 +475,7 @@
       <div class="table-wrap">
         <div class="table-header" style="flex-wrap:wrap;gap:8px">
           <div style="display:flex;align-items:center;gap:10px">
-            <input type="checkbox" class="cb-ticket" id="cb-all" title="เลือกทั้งหมด" onchange="toggleSelectAll(this)"/>
+            <span id="cb-all-wrap"></span>
             <div class="table-title">รายการ Ticket ทั้งหมด</div>
             <button class="btn-action btn-sm-green" id="btn-bulk-approve" style="display:none" onclick="doBulkApprove()">✓ Approve ที่เลือก (<span id="selected-count">0</span>)</button>
           </div>
@@ -505,7 +505,7 @@
         <table id="ticket-table" style="display:none">
           <thead>
             <tr>
-              <th style="width:32px"><input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/></th>
+              <th style="width:32px" id="th-cb-head">${canUseBulkSelect(currentUser?.role)?'<input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/>':''}</th>
               <th class="sortable" data-col="TICKETID" onclick="sortTable('TICKETID')">TICKET ID <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="SUBJECT" onclick="sortTable('SUBJECT')">Subject <span class="sort-icon">⇅</span></th>
               <th class="sortable" data-col="TrackB_Region" onclick="sortTable('TrackB_Region')">Province <span class="sort-icon">⇅</span></th>
@@ -1117,9 +1117,15 @@ function renderTicketTable(tickets){
     av = String(av).toLowerCase(); bv = String(bv).toLowerCase();
     return sortDir==='asc' ? av.localeCompare(bv,'th') : bv.localeCompare(av,'th');
   });
+  // Show/hide bulk select column based on role
+  const showBulk = canUseBulkSelect(currentUser?.role);
+  const cbWrap = $('cb-all-wrap');
+  if(cbWrap) cbWrap.innerHTML = showBulk ? '<input type="checkbox" class="cb-ticket" id="cb-all" title="เลือกทั้งหมด" onchange="toggleSelectAll(this)"/>' : '';
+  const bulkBtn = $('btn-bulk-approve');
+  if(bulkBtn && !showBulk) bulkBtn.style.display='none';
   tbody.innerHTML = sorted.slice(0,300).map(t => `
     <tr>
-      <td><input type="checkbox" class="cb-ticket ticket-cb" data-id="${t.TICKETID||''}" onchange="updateBulkBtn()"/></td>
+      <td>${canUseBulkSelect(currentUser?.role)?`<input type="checkbox" class="cb-ticket ticket-cb" data-id="${t.TICKETID||''}" onchange="updateBulkBtn()"/>`:''}</td>
       <td><span class="tid">${t.TICKETID||'—'}</span></td>
       <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.SUBJECT||'').replace(/"/g,'')}">${t.SUBJECT||'—'}</td>
       <td style="white-space:nowrap">${t.TrackB_Region||'—'}</td>
@@ -1489,6 +1495,11 @@ function isManagerRole(role){
   return ['MANAGER','BBTEC MANAGER','BBTEC_MANAGER','MANAGER NOR1','MANAGER NOR2',
           'BBTEC MANAGER NOR1','BBTEC MANAGER NOR2','BBTEC_MANAGER_NOR1','BBTEC_MANAGER_NOR2'].includes(r)
     || r.includes('MANAGER');
+}
+function canUseBulkSelect(role){
+  const r = (role||'').toUpperCase().replace(/ /g,'_');
+  return r==='BBTEC_MANAGER' || r==='FSO_MANAGER'
+    || r.includes('BBTEC_MANAGER') || r.includes('FSO_MANAGER');
 }
 
 // ── Modal ──
