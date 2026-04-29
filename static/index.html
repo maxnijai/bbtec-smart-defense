@@ -641,9 +641,16 @@ async function loadDashboard(){
 
 function goToTicketsFiltered(step, result){
   showPage('tickets');
-  if(step !== undefined && $('filter-step')) $('filter-step').value = String(step);
-  if(result !== undefined && $('filter-result')) $('filter-result').value = result;
-  filterTickets();
+  // Reset filters first
+  if($('filter-step')) $('filter-step').value = step !== undefined ? String(step) : '';
+  if($('filter-result')) $('filter-result').value = result !== undefined ? result : '';
+  // Don't reset province — keep user's locked province
+  if(allTickets.length > 0){
+    filterTickets();
+  } else {
+    // Tickets not loaded yet — load then filter
+    loadTickets().then(()=>filterTickets()).catch(()=>{});
+  }
 }
 
 function renderKPI(d){
@@ -874,6 +881,7 @@ let sortCol = 'PENALTYBAHT_TRACKB';
 let sortDir = 'desc';
 
 async function loadTickets(){
+  return new Promise(async (resolve, reject) => {
   try {
     const res = await fetch(`${API}/api/tickets`,{credentials:'include'});
     const data = await res.json();
@@ -923,7 +931,9 @@ async function loadTickets(){
     renderTicketTable(getFilteredTickets());
     renderTicketsKPI(getFilteredTickets());
     renderPivotTable(allTickets);
-  } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ' }
+  } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ'; reject(e); }
+  resolve();
+  });
 }
 
 function getFilteredTickets(){
@@ -933,8 +943,8 @@ function getFilteredTickets(){
   const province = $('filter-province')?.value||'';
   return allTickets.filter(t => {
     const matchQ = !q || (t.TICKETID||'').toLowerCase().includes(q) || (t.SUBJECT||'').toLowerCase().includes(q);
-    const tStep = String(t.STEP||'0');
-    const matchStep = !step || tStep === step || (step==='0' && (!t.STEP||t.STEP===''));
+    const tStep = String(t.STEP||'').trim();
+    const matchStep = !step || tStep === step || (step==='0' && (tStep===''||tStep==='0'));
     const matchResult = !result || t.FINAL_RESULT === result;
     const matchProv = !province || (t.TRUEOWNERGROUP||'') === province;
     return matchQ && matchStep && matchResult && matchProv;
