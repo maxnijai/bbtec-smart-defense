@@ -198,7 +198,10 @@
   th.sort-desc .sort-icon::after{content:'↓';opacity:1}
   /* Pivot table styles */
   .pivot-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
-  .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;top:0;z-index:2}
+  .pivot-table tr.data-row{cursor:pointer;transition:background .12s}
+  .pivot-table tr.data-row:hover td{background:#1e3a5f}
+  .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent2)}
   .pivot-table th:first-child{text-align:left;width:52px}
   .pivot-table th:nth-child(2){text-align:left;width:110px}
   .pivot-table th:nth-child(3),.pivot-table th:nth-child(4){width:60px}
@@ -1238,7 +1241,7 @@ function renderPivotTable(tickets){
   let rows = `<table class="pivot-table">
     <thead><tr>
       <th>Region</th>
-      <th>Owner Group</th>
+      <th>Owner Group <span style="font-size:9px;opacity:.5">↗</span></th>
       <th>Total<br>Ticket</th>
       <th>Step1<br>Submit</th>
       <th>%S1</th>
@@ -1260,9 +1263,9 @@ function renderPivotTable(tickets){
     groups.forEach(([grp,d])=>{
       Object.keys(regT).forEach(k=>regT[k]+=d[k]);
       const pct = d.total ? Math.round(d.step1/d.total*100) : 0;
-      rows += `<tr>
+      rows += `<tr class="data-row" onclick="filterByOwnerGroup('${grp.replace(/'/g,"\\'")}')">
         <td style="color:var(--muted)">${reg}</td>
-        <td style="font-size:10px">${grp.replace('TRUE-TH-BBT-','').replace('-NOP','')}</td>
+        <td style="font-size:10px" title="คลิกเพื่อกรอง ticket">${grp.replace('TRUE-TH-BBT-','').replace('-NOP','')}</td>
         <td>${fmt(d.total)}</td>
         <td class="num-amber">${fmt(d.step1)}</td>
         <td>${pctBadge(pct)}</td>
