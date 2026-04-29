@@ -845,23 +845,36 @@ DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','�
 def drilldown(ticketid):
     try:
         gc = get_gc()
-        ws = gc.open_by_key(DRILLDOWN_SHEET_ID).worksheet(DRILLDOWN_SHEET_NAME)
+        ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
+        # Try sheet names in order: sheet1, Sheet1, แผน, MAXMA, or first sheet
+        ws = None
+        try_names = [DRILLDOWN_SHEET_NAME, 'Sheet1', 'sheet1', 'SHEET1', 'แผน', 'Plan', 'MAXMA']
+        for name in try_names:
+            try:
+                ws = ss.worksheet(name)
+                break
+            except Exception:
+                continue
+        if ws is None:
+            # Fallback: use first worksheet
+            ws = ss.get_worksheet(0)
+        if ws is None:
+            return jsonify({"error": f"ไม่พบ worksheet ใน spreadsheet นี้"}), 404
+
         all_vals = sheets_retry(ws.get_all_values)
         if not all_vals:
             return jsonify({"rows": []})
+
         headers = [str(h).strip() for h in all_vals[0]]
-        # Find column index that contains the ticket id (search all columns)
         tid_clean = str(ticketid).strip()
         matched_rows = []
         for row in all_vals[1:]:
-            padded = row + [''] * (len(headers) - len(row))
+            padded = row + [''] * max(0, len(headers) - len(row))
             row_dict = dict(zip(headers, padded))
-            # Check if any cell in this row contains the ticket id
             if any(tid_clean in str(v) for v in padded):
-                # Return only required columns
                 filtered = {c: row_dict.get(c, '') for c in DRILLDOWN_COLS}
                 matched_rows.append(filtered)
-        return jsonify({"rows": matched_rows, "total": len(matched_rows)})
+        return jsonify({"rows": matched_rows, "total": len(matched_rows), "sheet": ws.title})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
