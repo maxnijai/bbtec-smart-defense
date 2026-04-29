@@ -658,21 +658,35 @@ async function doLogin(){
   const btn = $('btn-login');
   btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
   $('login-err').textContent = '';
-  try {
-    const res = await fetch(`${API}/api/login`,{
-      method:'POST',credentials:'include',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ username: $('inp-user').value.trim(), password: $('inp-pass').value })
-    });
-    const data = await res.json();
-    if(data.success){
-      currentUser = data;
-      initApp(data);
-    } else {
-      $('login-err').textContent = data.error || 'เข้าสู่ระบบไม่สำเร็จ';
+  let delay = 2000;
+  for(let attempt=0; attempt<4; attempt++){
+    try {
+      const res = await fetch(`${API}/api/login`,{
+        method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: $('inp-user').value.trim(), password: $('inp-pass').value })
+      });
+      const data = await res.json();
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(attempt < 3){
+          $('login-err').textContent = `⏳ Server ยุ่งอยู่ รอ ${Math.round(delay/1000)}s แล้วลองใหม่...`;
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 16000);
+          continue;
+        }
+        $('login-err').textContent = 'Server ยุ่งมาก กรุณารอสักครู่แล้วลองใหม่';
+        break;
+      }
+      if(data.success){
+        currentUser = data; initApp(data);
+      } else {
+        $('login-err').textContent = data.error || 'เข้าสู่ระบบไม่สำเร็จ';
+      }
+      break;
+    } catch(e){
+      $('login-err').textContent = 'ไม่สามารถเชื่อมต่อ Server';
+      break;
     }
-  } catch(e){
-    $('login-err').textContent = 'ไม่สามารถเชื่อมต่อ Server';
   }
   btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
 }
@@ -1687,32 +1701,32 @@ function openTicket(ticket){
         <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
           <!-- FSO KEY INFO — highlighted for decision making -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
-              <div style="font-size:10px;color:var(--muted)">Group Problem</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
+              <div style="font-size:10px;color:#94a3b8">Group Problem</div>
               <div style="font-weight:600;color:var(--text)">${ticket['Group problem']||'—'}</div>
             </div>
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
-              <div style="font-size:10px;color:var(--muted)">Sub Problem ⭐</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
+              <div style="font-size:10px;color:#94a3b8">Sub Problem ⭐</div>
               <div style="font-weight:600;color:var(--accent2)">${ticket['Sub Problem']||'—'}</div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
-              <div style="font-size:10px;color:var(--muted)">TARGETFINISH</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
+              <div style="font-size:10px;color:#94a3b8">TARGETFINISH</div>
               <div style="font-weight:500;color:var(--text)">${ticket.TARGETFINISH||'—'}</div>
             </div>
-            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
-              <div style="font-size:10px;color:var(--muted)">ACT_RESTORATIONDATE ⭐</div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px;color:#e2e8f0">
+              <div style="font-size:10px;color:#94a3b8">ACT_RESTORATIONDATE ⭐</div>
               <div style="font-weight:600;color:var(--amber)">${ticket.ACT_RESTORATIONDATE||ticket.ACT_RESTORATIONDATE||'—'}</div>
             </div>
           </div>
           <div style="background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:10px;margin-bottom:4px">
             <div style="font-size:10px;color:#6ee7b7;margin-bottom:4px">📎 Overdue Detail + Link รูป (AG) ⭐</div>
-            <div style="font-size:12px;color:var(--text)">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
+            <div style="font-size:12px;color:#e2e8f0">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
           </div>
           <div style="background:#1a2640;border:1px solid #253550;border-radius:8px;padding:10px">
             <div style="font-size:10px;color:#93c5fd;margin-bottom:4px">🔗 แนบ LINK ชี้แจง (AH) ⭐</div>
-            <div style="font-size:12px">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
+            <div style="font-size:12px;color:#93c5fd">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
           </div>
         </div>
         <div class="decision-row">
@@ -1898,23 +1912,34 @@ async function submitStep1(tid){
 async function submitStep2(tid){
   const decision = $('f-fso-decision')?.value||'';
   if(!decision){ showToast('กรุณาเลือก ปรับ หรือ ไม่ปรับ','error'); return; }
-  await apiPost(`/api/ticket/${tid}/step2`, { fso_decision: decision, remark: $('f-remark')?.value||'' });
+  const body = { fso_decision: decision, remark: $('f-remark')?.value||'' };
+  optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision });
+  closeModal();
+  showToast('บันทึก Step 2 สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/step2`, body);
 }
 
 async function submitDefendRequest(tid){
   const reason = $('f-defend-reason')?.value||'';
   if(!reason){ showToast('กรุณากรอกเหตุผล','error'); return; }
-  await apiPost(`/api/ticket/${tid}/defend/request`, { defend_reason: reason });
+  optimisticUpdate(tid, { STEP:'3' });
+  closeModal(); showToast('ส่ง Defend สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/defend/request`, { defend_reason: reason });
 }
 
 async function submitDefendReview(tid){
   const decision = $('f-fso-decision')?.value||'';
   if(!decision){ showToast('กรุณาเลือกผล','error'); return; }
-  await apiPost(`/api/ticket/${tid}/defend/review`, { decision, remark: $('f-remark')?.value||'' });
+  const body = { decision, remark: $('f-remark')?.value||'' };
+  optimisticUpdate(tid, { STEP:'3', FINAL_RESULT: decision });
+  closeModal(); showToast('บันทึกผล Defend สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/defend/review`, body);
 }
 
 async function submitApprove(tid){
-  await apiPost(`/api/ticket/${tid}/approve`, {});
+  optimisticUpdate(tid, { STEP:'5' });
+  closeModal(); showToast('Approve สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/approve`, {});
 }
 
 // ── Optimistic UI helpers ──
