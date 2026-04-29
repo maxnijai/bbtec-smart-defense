@@ -1047,8 +1047,8 @@ async function loadTickets(){
         </div>`;
       reject(data.error); return;
     }
-    allTicketsRaw = data.tickets || [];
-    allTickets = (data.tickets || []).sort((a,b)=>{
+    allTicketsRaw = mergeServerTickets(data.tickets || []);
+    allTickets = [...allTicketsRaw].sort((a,b)=>{
       const av = parseFloat(String(a.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
       const bv = parseFloat(String(b.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
       return bv - av;
@@ -1923,7 +1923,10 @@ async function submitStep2(tid){
 async function submitDefendRequest(tid){
   const reason = $('f-defend-reason')?.value||'';
   if(!reason){ showToast('กรุณากรอกเหตุผล','error'); return; }
-  optimisticUpdate(tid, { STEP:'3' });
+  // Find current defend count to show correct round
+  const cur = allTickets.find(t => String(t.TICKETID) === String(tid));
+  const nextCount = String(parseInt(cur?.DEFEND_COUNT||0) + 1);
+  optimisticUpdate(tid, { STEP:'3', DEFEND_COUNT: nextCount });
   closeModal(); showToast('ส่ง Defend สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/defend/request`, { defend_reason: reason });
 }
@@ -1944,16 +1947,36 @@ async function submitApprove(tid){
 }
 
 // ── Optimistic UI helpers ──
+const _optimisticLocks = {}; // tid → timestamp of last optimistic patch
+
 function optimisticUpdate(tid, patch){
-  // Update allTickets in memory immediately so UI reflects change instantly
   const idx = allTickets.findIndex(t => String(t.TICKETID) === String(tid));
   if(idx !== -1){
     allTickets[idx] = {...allTickets[idx], ...patch};
     allTicketsRaw = allTickets;
+    _optimisticLocks[tid] = Date.now(); // lock this ticket for 8s
   }
   renderTicketTable(getFilteredTickets());
   renderTicketsKPI(getFilteredTickets());
   renderPivotTable(allTicketsRaw);
+}
+
+// Merge server data but respect optimistic locks
+function mergeServerTickets(serverTickets){
+  const now = Date.now();
+  const LOCK_MS = 8000; // 8 seconds lock after optimistic update
+  return serverTickets.map(t => {
+    const tid = String(t.TICKETID);
+    const lockTs = _optimisticLocks[tid];
+    if(lockTs && (now - lockTs) < LOCK_MS){
+      // Still locked — keep our optimistic values for STEP and FSO decision
+      const local = allTickets.find(l => String(l.TICKETID) === tid);
+      if(local) return {...t, STEP: local.STEP, 'FSO พิจารณา (ปรับ/ไม่ปรับ)': local['FSO พิจารณา (ปรับ/ไม่ปรับ)'], FINAL_RESULT: local.FINAL_RESULT, DEFEND_COUNT: local.DEFEND_COUNT};
+    } else {
+      delete _optimisticLocks[tid]; // unlock expired
+    }
+    return t;
+  });
 }
 
 // Map endpoint → which fields change so we can patch locally
@@ -1988,7 +2011,7 @@ async function apiPostSilent(url, body){
         return;
       }
       if(data.success){
-        setTimeout(()=>{ loadTickets().catch(()=>{}); loadDashboard().catch(()=>{}); }, 500);
+        setTimeout(()=>{ loadTickets().catch(()=>{}); loadDashboard().catch(()=>{}); }, 5000);
       } else if(data.error){
         showToast(`⚠️ ${data.error}`, 'error');
       }
