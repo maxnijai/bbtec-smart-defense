@@ -246,15 +246,20 @@ def require_role(*roles):
 # -----------------------------------------
 # Audit Log
 # -----------------------------------------
-def write_audit(ticketid, action, detail, step_from="", step_to=""):
+def write_audit(ticketid="", action="", detail="", step_from="", step_to=""):
     try:
+        from flask import has_request_context
+        user = session.get("user","") if has_request_context() else ""
+        name = session.get("name","") if has_request_context() else ""
+        role = session.get("role","") if has_request_context() else ""
         sheet = get_sheet("SD_AUDIT_LOG")
         sheet.append_row([
-            now_str(), session.get("user",""), session.get("name",""),
-            session.get("role",""), ticketid, action, detail, step_from, step_to,
+            now_str(), user, name, role,
+            str(ticketid), str(action), str(detail)[:200],
+            str(step_from), str(step_to),
         ], value_input_option="USER_ENTERED")
     except Exception:
-        pass
+        pass  # Audit MUST never crash workflow
 
 @app.route("/api/ticket/<ticketid>/audit")
 @login_required
