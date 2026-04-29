@@ -1990,7 +1990,25 @@ function getPatchFromUrl(url, body){
   return {};
 }
 
-// ── Background sync (fire-and-forget with retry) ──
+// ── Safe loadTickets — respects optimistic locks ──
+function hasActiveLocks(){
+  const now = Date.now();
+  return Object.values(_optimisticLocks).some(ts => (now - ts) < 8000);
+}
+
+function safeLoadTickets(){
+  if(hasActiveLocks()){
+    // Retry after locks expire
+    setTimeout(safeLoadTickets, 1000);
+    return;
+  }
+  loadTickets().catch(()=>{});
+}
+
+function safeRefresh(){
+  safeLoadTickets();
+  loadDashboard().catch(()=>{});
+}
 async function apiPostSilent(url, body){
   let delay = 2000;
   for(let attempt=0; attempt<4; attempt++){
@@ -2011,7 +2029,7 @@ async function apiPostSilent(url, body){
         return;
       }
       if(data.success){
-        setTimeout(()=>{ loadTickets().catch(()=>{}); loadDashboard().catch(()=>{}); }, 5000);
+        setTimeout(safeRefresh, 5000);
       } else if(data.error){
         showToast(`⚠️ ${data.error}`, 'error');
       }
@@ -2052,10 +2070,7 @@ async function apiPost(url, body){
         optimisticUpdate(tid, patch);
       }
       closeModal();
-      setTimeout(()=>{
-        loadTickets().catch(()=>{});
-        loadDashboard().catch(()=>{});
-      }, 800);
+      setTimeout(safeRefresh, 800);
     } else {
       showToast(data.error||'เกิดข้อผิดพลาด','error');
     }
@@ -2114,7 +2129,7 @@ async function doBulkApprove(){
     const d = await res.json();
     if(d.success){
       showToast(`Approve สำเร็จ ${d.approved} tickets`,'success');
-      loadTickets(); loadDashboard();
+      safeRefresh();
     } else showToast(d.error||'error','error');
   } catch(e){ showToast('ไม่สามารถเชื่อมต่อ','error'); }
 }
