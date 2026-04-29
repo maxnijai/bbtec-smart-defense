@@ -1668,7 +1668,7 @@ function openTicket(ticket){
         ${(ticket['Remark FSO']||ticket['remark_fso']||'') ? `
         <div style="background:#1e2a3a;border:1px solid #3b5a7a;border-radius:8px;padding:12px;margin-bottom:12px">
           <div style="font-size:11px;color:#93c5fd;font-weight:600;margin-bottom:6px">💬 Remark จาก FSO</div>
-          <div style="font-size:13px;color:var(--text);line-height:1.6">${ticket['Remark FSO']||ticket['remark_fso']||''}</div>
+          <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${ticket['Remark FSO']||ticket['remark_fso']||''}</div>
         </div>` : ''}
         ${isNoPenalty ? 
           `<div style="text-align:center;color:#15803d;padding:12px;background:#dcfce7;border-radius:8px">
@@ -1760,7 +1760,7 @@ function openTicket(ticket){
         <div class="form-section-title">STEP 3 — FSO พิจารณา Defend ครั้งที่ ${defendCount}/2</div>
         <div style="margin-bottom:14px;padding:14px;background:#1e2d1a;border:2px solid #4a7c59;border-radius:10px">
           <div style="font-size:11px;color:#6ee7b7;font-weight:600;margin-bottom:8px">⚔️ เหตุผลที่ Engineer ขอ Defend</div>
-          <div style="font-size:13px;color:var(--text);line-height:1.6">${defendReason}</div>
+          <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${defendReason}</div>
         </div>
         <div class="decision-row">
           <button class="dec-btn" id="dec-penalty" onclick="selectDecision('ปรับ')">🔴 ยังคงปรับ</button>
@@ -1826,7 +1826,7 @@ function openTicket(ticket){
       ${(ticket['Remark FSO']||'').trim() ? `
       <div class="detail-item" style="grid-column:span 2;background:#1e2a3a;border:1px solid #3b5a7a">
         <div class="detail-label" style="color:#93c5fd">💬 Remark จาก FSO (Step 2)</div>
-        <div class="detail-val" style="color:var(--text);font-size:13px">${ticket['Remark FSO']||''}</div>
+        <div class="detail-val" style="color:#e2e8f0;font-size:13px">${ticket['Remark FSO']||''}</div>
       </div>` : ''}
     </div>
     ${formHTML}
