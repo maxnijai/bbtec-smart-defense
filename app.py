@@ -153,48 +153,59 @@ def init_db():
 # Sync: Sheets → DB  (run on startup + /api/sync)
 # ─────────────────────────────────────────────
 def sync_tickets_from_sheets():
-    """Pull all tickets from Sheets and upsert into DB."""
+    """Pull all tickets from Sheets and upsert into DB. Deletes tickets no longer in Sheets."""
     try:
         sheet = get_sheet("NOR_Penalty_Ticket")
         records = rows_to_dicts(sheet)
         if not records:
             return 0
+        # Build set of all ticket IDs from Sheets
+        sheet_ids = set()
+        for r in records:
+            tid = str(r.get("TICKETID","")).strip()
+            if tid:
+                sheet_ids.add(tid)
+
         conn = get_conn()
         count = 0
         try:
             with conn.cursor() as cur:
+                # Upsert all tickets from Sheets
                 for r in records:
-                    tid = str(r.get("TICKETID", "")).strip()
+                    tid = str(r.get("TICKETID","")).strip()
                     if not tid:
                         continue
-                    # Check if row already exists — if so keep our step/defend/locked
                     cur.execute("SELECT step, defend_count, locked, fso_decision, final_result, owner1, updated_by FROM tickets WHERE ticketid=%s", (tid,))
                     existing = cur.fetchone()
                     if existing:
-                        # Merge: keep DB's workflow fields, update sheet data
-                        cur.execute("""
-                            UPDATE tickets SET
-                                data = %s,
-                                synced_at = NOW()
-                            WHERE ticketid = %s
-                        """, (json.dumps(r), tid))
+                        # Keep DB workflow fields, only update sheet data
+                        cur.execute("UPDATE tickets SET data=%s, synced_at=NOW() WHERE ticketid=%s",
+                                    (json.dumps(r), tid))
                     else:
                         cur.execute("""
                             INSERT INTO tickets (ticketid, data, step, defend_count, locked,
                                 fso_decision, final_result, owner1, updated_by)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (ticketid) DO UPDATE SET data=EXCLUDED.data, synced_at=NOW()
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         """, (
                             tid, json.dumps(r),
                             str(r.get("STEP","")).strip(),
                             int(r.get("DEFEND_COUNT",0) or 0),
-                            str(r.get("LOCKED","")).upper() == "TRUE",
+                            str(r.get("LOCKED","")).upper()=="TRUE",
                             str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip(),
                             str(r.get("FINAL_RESULT","")).strip(),
                             str(r.get("owner1","")).strip(),
                             str(r.get("UPDATED_BY","")).strip(),
                         ))
                     count += 1
+
+                # Delete tickets no longer in Sheets
+                cur.execute("SELECT ticketid FROM tickets")
+                db_ids = {row["ticketid"] for row in cur.fetchall()}
+                to_delete = db_ids - sheet_ids
+                if to_delete:
+                    cur.execute("DELETE FROM tickets WHERE ticketid = ANY(%s)", (list(to_delete),))
+                    print(f"🗑️  Deleted {len(to_delete)} tickets removed from Sheets")
+
             conn.commit()
         finally:
             release_conn(conn)
