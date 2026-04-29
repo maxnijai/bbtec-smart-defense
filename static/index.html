@@ -644,8 +644,8 @@ function initApp(user){
   dash.classList.add('active','flex-page');
   loadDashboard();
   loadTickets();
-  // Auto-init audit sheet
-  fetch(`${API}/api/audit/init`,{credentials:'include'}).catch(()=>{});
+  // Init audit sheet quietly in background after login stabilizes
+  setTimeout(()=>fetch(`${API}/api/audit/init`,{credentials:'include'}).catch(()=>{}), 3000);
 }
 
 // ── Navigation ──
@@ -1373,51 +1373,12 @@ function renderCharts(){
         '</div>' +
       '</div>' +
       '<div class="chart-card">' +
-        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚔️ Defend Success Rate by Group</div>' +
-        '<canvas id="chart-defend-rate" height="200"></canvas>' +
-      '</div>' +
-      '<div class="chart-card">' +
         '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม</div>' +
         '<div style="display:flex;flex-direction:column;gap:6px">' + barsHTML +
           '<div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">รอดำเนินการทั้งหมด: <b style="color:var(--amber)">'+fmtN(total-reviewed)+'</b> tickets</div>' +
         '</div>' +
       '</div>' +
     '</div>';
-
-  // Defend Rate by Group chart
-  setTimeout(function(){
-    const drCanvas = $('chart-defend-rate');
-    if(drCanvas && window.Chart){
-      if(drCanvas._chart) drCanvas._chart.destroy();
-      const grpMap = {};
-      t.forEach(x=>{
-        const g = (x.TRUEOWNERGROUP||'Unknown').replace('TRUE-TH-BBT-','').replace('-NOP','');
-        if(!grpMap[g]) grpMap[g]={total:0,won:0};
-        const dc = parseInt(x.DEFEND_COUNT||0);
-        if(dc>0){ grpMap[g].total++; if(x.FINAL_RESULT==='ไม่ปรับ') grpMap[g].won++; }
-      });
-      const grps = Object.entries(grpMap).filter(([,v])=>v.total>0)
-        .sort((a,b)=>b[1].total-a[1].total).slice(0,8);
-      drCanvas._chart = new Chart(drCanvas,{
-        type:'bar',
-        data:{
-          labels: grps.map(([g])=>g),
-          datasets:[
-            {label:'สำเร็จ',data:grps.map(([,v])=>v.won),backgroundColor:'#10b981',borderWidth:0,borderRadius:3},
-            {label:'ไม่สำเร็จ',data:grps.map(([,v])=>v.total-v.won),backgroundColor:'#ef4444',borderWidth:0,borderRadius:3}
-          ]
-        },
-        options:{
-          responsive:true, maintainAspectRatio:false,
-          plugins:{legend:{position:'bottom',labels:{color:'#8aa0c0',font:{size:10}}}},
-          scales:{
-            x:{stacked:true,ticks:{color:'#8aa0c0',font:{size:9}},grid:{display:false}},
-            y:{stacked:true,ticks:{color:'#8aa0c0',font:{size:9}},grid:{color:'#253550'}}
-          }
-        }
-      });
-    }
-  },150);
 
   setTimeout(function(){
     const c = $('chart-exec-baht');
