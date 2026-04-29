@@ -322,14 +322,26 @@ def me():
 @login_required
 def get_audit_log(ticketid):
     try:
-        sheet = get_sheet("SD_AUDIT_LOG")
+        try:
+            sheet = get_sheet("SD_AUDIT_LOG")
+        except Exception:
+            return jsonify({"logs": []})  # Sheet not created yet
         rows = sheet.get_all_values()
+        if not rows or len(rows) < 2:
+            return jsonify({"logs": []})
         logs = []
         for r in rows[1:]:
-            if len(r) >= 5 and r[4] == ticketid:
-                logs.append({"timestamp":r[0],"user":r[1],"name":r[2],"role":r[3],
-                    "action":r[5] if len(r)>5 else "","detail":r[6] if len(r)>6 else "",
-                    "step_from":r[7] if len(r)>7 else "","step_to":r[8] if len(r)>8 else ""})
+            if len(r) >= 5 and str(r[4]).strip() == str(ticketid).strip():
+                logs.append({
+                    "timestamp": r[0] if len(r)>0 else "",
+                    "user":      r[1] if len(r)>1 else "",
+                    "name":      r[2] if len(r)>2 else "",
+                    "role":      r[3] if len(r)>3 else "",
+                    "action":    r[5] if len(r)>5 else "",
+                    "detail":    r[6] if len(r)>6 else "",
+                    "step_from": r[7] if len(r)>7 else "",
+                    "step_to":   r[8] if len(r)>8 else "",
+                })
         logs.reverse()
         return jsonify({"logs": logs})
     except Exception as e:
