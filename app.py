@@ -832,6 +832,40 @@ def sync_status():
         return jsonify({"error": str(e)}), 500
 
 # ─────────────────────────────────────────────
+# Drill Down — Queue data from MAXMA sheet
+# ─────────────────────────────────────────────
+DRILLDOWN_SHEET_ID   = "1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU"
+DRILLDOWN_SHEET_NAME = "sheet1"
+DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม',
+                  'Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log',
+                  'สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน']
+
+@app.route("/api/drilldown/<ticketid>")
+@login_required
+def drilldown(ticketid):
+    try:
+        gc = get_gc()
+        ws = gc.open_by_key(DRILLDOWN_SHEET_ID).worksheet(DRILLDOWN_SHEET_NAME)
+        all_vals = sheets_retry(ws.get_all_values)
+        if not all_vals:
+            return jsonify({"rows": []})
+        headers = [str(h).strip() for h in all_vals[0]]
+        # Find column index that contains the ticket id (search all columns)
+        tid_clean = str(ticketid).strip()
+        matched_rows = []
+        for row in all_vals[1:]:
+            padded = row + [''] * (len(headers) - len(row))
+            row_dict = dict(zip(headers, padded))
+            # Check if any cell in this row contains the ticket id
+            if any(tid_clean in str(v) for v in padded):
+                # Return only required columns
+                filtered = {c: row_dict.get(c, '') for c in DRILLDOWN_COLS}
+                matched_rows.append(filtered)
+        return jsonify({"rows": matched_rows, "total": len(matched_rows)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────
 # Static + health
 # ─────────────────────────────────────────────
 @app.route("/system-flow.png")
