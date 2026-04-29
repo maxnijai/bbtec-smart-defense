@@ -248,6 +248,7 @@
   .badge-3{background:#fef3c7;color:#92400e}
   .badge-4{background:#dcfce7;color:#15803d}
   .badge-5{background:#ede9fe;color:#5b21b6}
+  .badge-pending{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
   .badge-lock{background:#f1f5f9;color:#475569}
   .badge-penalty{background:#fee2e2;color:#991b1b}
   .badge-no-penalty{background:#dcfce7;color:#15803d}
@@ -1136,7 +1137,7 @@ function sortTable(col){
 }
 
 function stepBadge(step, defendCount){
-  if(!step) return '<span class="badge badge-1">รอ Step 1</span>';
+  if(!step || step==='0') return '<span class="badge badge-pending">รอ Step 1</span>';
   if(step==='3'){
     const round = parseInt(defendCount||0) || 1;
     return `<span class="badge badge-3">⚔️ Defend ${round}/2</span>`;
