@@ -1894,11 +1894,13 @@ function exportExcel(){
   if(!filtered.length){ showToast('ไม่มีข้อมูลที่จะ export','error'); return; }
   const cols = ['TICKETID','SUBJECT','TrackB_Region','PENALTYBAHT_TRACKB',
     'FSO พิจารณา (ปรับ/ไม่ปรับ)','STEP','FINAL_RESULT','Owner',
-    'Group problem','Sub Problem','LAST_UPDATED','UPDATED_BY'];
+    'Group problem','Sub Problem','Overdue Detail แนบLINK รูป','แนบ LINK ชี้แจง',
+    'LAST_UPDATED','UPDATED_BY'];
   const ws_data = [cols, ...filtered.map(t=>cols.map(c=>t[c]||''))];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(ws_data);
-  ws['!cols'] = cols.map(c=>({wch:Math.max(c.length+2,15)}));
+  const colWidths = {'Overdue Detail แนบLINK รูป':50,'แนบ LINK ชี้แจง':45};
+  ws['!cols'] = cols.map(c=>({wch: colWidths[c] || Math.max(c.length+2,15)}));
   XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
   const date = new Date().toLocaleDateString('th-TH').replace(/\//g,'-');
   XLSX.writeFile(wb, `SmartDefense_${date}.xlsx`);
