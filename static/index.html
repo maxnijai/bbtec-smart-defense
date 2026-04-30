@@ -1482,10 +1482,15 @@ function renderPivotTable(tickets){
     if(!regionMap[reg][grp]) regionMap[reg][grp]={total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,fb:0};
     const d=regionMap[reg][grp]; d.total++;
     const s=String(t.STEP||'').trim();
-    if(s==='1') d.s1++; else if(s==='2') d.s2++; else if(s==='3') d.s3++;
-    else if(s==='4') d.s4++; else if(s==='5') d.s5++;
-    else if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.s6p++;
-    else if(s==='6'&&t.FINAL_RESULT==='ไม่ปรับ') d.s6n++;
+    const sn = parseInt(s)||0;
+    // นับแบบ cumulative — ถ้าอยู่ step N หมายความว่าเคยผ่าน step 1..N-1 มาแล้ว
+    if(sn>=1) d.s1++;  // เคย submit step 1 แล้ว
+    if(sn>=2) d.s2++;  // เคยผ่าน FSO แล้ว
+    if(sn>=3) d.s3++;  // เคย Defend แล้ว
+    if(sn>=4) d.s4++;  // เคยผ่าน BBTEC Manager แล้ว
+    if(sn>=5) d.s5++;  // เคยผ่าน FSO Manager แล้ว
+    if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.s6p++;
+    if(s==='6'&&t.FINAL_RESULT==='ไม่ปรับ') d.s6n++;
     d.baht+=parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
     if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.fb+=parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
   });
