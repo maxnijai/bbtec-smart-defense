@@ -1184,29 +1184,30 @@ function sortTable(col){
   renderTicketTable(getFilteredTickets());
 }
 
-function stepBadge(step, defendCount, fsoDecision, finalResult){
-  const s = String(step||'').trim();
-  const dc = parseInt(defendCount||0);
+function stepBadge(step, defendCount, fsoDecision, finalResult, mgrDefend){
+  const s   = String(step||'').trim();
+  const dc  = parseInt(String(defendCount||'0').replace(/\/[^]*/,''))||0;
   const fso = String(fsoDecision||'').trim();
   const fr  = String(finalResult||'').trim();
+  const mgr = String(mgrDefend||'').trim();
 
-  if(!s || s==='0')  return '<span class="badge badge-pending">รอ Step 1</span>';
-  if(s==='1')        return '<span class="badge badge-1">✅ Step 1</span>';
+  if(!s || s==='0') return '<span class="badge badge-pending">⬜ รอ Step 1</span>';
+  if(s==='1')       return '<span class="badge badge-1">✅ Step 1</span>';
   if(s==='2'){
-    // FSO ตัดสิน ปรับ — รอ Engineer Defend หรือยอมรับ
-    if(fso==='ปรับ') return '<span class="badge badge-2">⚠️ FSO: ปรับ</span>';
+    if(fso==='ปรับ') return '<span class="badge badge-2" style="background:#fef3c7;color:#92400e">⚠️ FSO: ปรับ</span>';
+    if(fso==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ FSO: ไม่ปรับ</span>';
     return '<span class="badge badge-2">Step 2</span>';
   }
-  if(s==='3'){
-    // Engineer ขอ Defend แล้ว — รอ FSO ตอบกลับ
-    return `<span class="badge badge-3">⚔️ Defend ${dc}/2 — รอ FSO</span>`;
+  if(s==='3')  return `<span class="badge badge-3">⚔️ Defend ${dc}/2 — รอ FSO</span>`;
+  if(s==='4')  return '<span class="badge badge-4" style="background:#dbeafe;color:#1d4ed8">📋 รอ BBTEC Manager</span>';
+  if(s==='5'){
+    if(mgr) return '<span class="badge badge-3" style="background:#fef3c7;color:#92400e">⚔️ Manager Defend — รอ FSO Mgr</span>';
+    return '<span class="badge badge-5" style="background:#ede9fe;color:#5b21b6">📋 รอ FSO Manager</span>';
   }
-  if(s==='4'){
+  if(s==='6'){
     if(fr==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ Final: ไม่ปรับ</span>';
-    if(fr==='ปรับ')   return '<span class="badge badge-penalty">🔒 Final: ปรับ</span>';
-    return '<span class="badge badge-4">Final</span>';
+    return '<span class="badge badge-penalty">🔒 Final: ปรับ</span>';
   }
-  if(s==='5')        return '<span class="badge badge-5">✓ Approved</span>';
   return `<span class="badge badge-pending">${s}</span>`;
 }
 
@@ -2081,6 +2082,10 @@ function openTicket(ticket){
     </div>
   `;
   $('modal-overlay').classList.add('open');
+}
+
+function forceCloseModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
 }
 
 function closeModal(e){
