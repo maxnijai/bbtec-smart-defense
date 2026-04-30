@@ -1491,10 +1491,6 @@ function renderPivotTable(tickets){
   if(!wrap) return;
   const fmt = n => Number(n||0).toLocaleString('th-TH');
   const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
-  const GRAND_TOTAL = tickets.filter(t=>t.TICKETID).length || 1;
-  // % เทียบ Grand Total
-  const pctG = n => n > 0 ? `<span style="display:block;font-size:9px;color:var(--muted);margin-top:1px">${(n/GRAND_TOTAL*100).toFixed(1)}%</span>` : '';
-
   // Helper: normalize group name — merge WIFI into base province group
   function normalizeGroup(ownerGroup) {
     if(!ownerGroup) return 'Unknown';
@@ -1531,14 +1527,9 @@ function renderPivotTable(tickets){
     if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
   });
 
-  // cell helper: n + % of grand total
-  function nc(n, colorClass){
-    if(!n) return '<td style="text-align:center;color:var(--muted)">—</td>';
-    const p = (n/GRAND_TOTAL*100).toFixed(1);
-    return `<td style="text-align:center" class="${colorClass||''}">${n}<span style="display:block;font-size:9px;color:var(--muted)">${p}%</span></td>`;
-  }
-
   const GRAND_TOTAL = tickets.filter(t=>t.TICKETID).length || 1;
+
+  // cell helper: n + % of grand total
   function nc(n, colorClass){
     if(!n) return '<td style="text-align:center;color:var(--muted)">—</td>';
     const p = (n/GRAND_TOTAL*100).toFixed(1);
