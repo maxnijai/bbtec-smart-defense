@@ -172,10 +172,15 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_prod_ticket ON productivity(ticket);
     CREATE INDEX IF NOT EXISTS idx_prod_team ON productivity(team_id);
     """)
-    # Migrate: add manager_defend columns if not exists
+    # Manager Defend columns (migrate safe)
     try:
         db_execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS manager_defend TEXT DEFAULT ''")
         db_execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS manager_defend_remark TEXT DEFAULT ''")
+    except Exception:
+        pass
+    # Migrate: add url_picture column if not exists (for existing deployments)
+    try:
+        db_execute("ALTER TABLE productivity ADD COLUMN IF NOT EXISTS url_picture TEXT DEFAULT ''")
     except Exception:
         pass
     print("✅ DB schema ready")
@@ -422,29 +427,6 @@ def _col_letter(idx):
         result = chr(65 + rem) + result
     return result
 
-def write_back_to_sheets(ticketid, fields: dict):
-    """Write workflow fields back to Sheets async (best-effort)."""
-    def _write():
-        try:
-            sheet = get_sheet("NOR_Penalty_Ticket")
-            all_vals = sheets_retry(sheet.get_all_values)
-            if not all_vals: return
-            headers = all_vals[0]
-            for i, row in enumerate(all_vals[1:], start=2):
-                if len(row) > 0 and str(row[0]).strip() == str(ticketid).strip():
-                    updates = []
-                    for col_name, value in fields.items():
-                        if col_name in headers:
-                            col_idx = headers.index(col_name) + 1
-                            col_letter = _col_letter(col_idx)
-                            updates.append({"range": f"{col_letter}{i}", "values": [[value]]})
-                    if updates:
-                        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
-                    break
-        except Exception as e:
-            print(f"⚠️ write_back_to_sheets error: {e}")
-    threading.Thread(target=_write, daemon=True).start()
-
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
@@ -581,7 +563,7 @@ def get_tickets():
         region   = session.get("region","")
         allowed  = [p.strip() for p in province.split(",") if p.strip() and p.upper() != "ALL"] if province and province.upper() not in ("ALL","") else []
 
-        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by, manager_defend FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
+        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by, COALESCE(manager_defend,'') as manager_defend FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
         tickets = []
         for row in (rows or []):
             t = ticket_to_dict(row)
@@ -1115,6 +1097,10 @@ def sync_productivity():
     })
 
 # ─────────────────────────────────────────────
+# Static + health
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
 # Manager Defend — Request (BBTEC_MANAGER)
 # ─────────────────────────────────────────────
 @app.route("/api/ticket/<ticketid>/manager-defend/request", methods=["POST"])
@@ -1125,13 +1111,16 @@ def manager_defend_request(ticketid):
     if not reason:
         return jsonify({"error": "กรุณากรอกเหตุผล"}), 400
     try:
-        row = db_execute("SELECT step, defend_count, final_result, manager_defend, locked FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        row = db_execute("SELECT step, defend_count, final_result, locked FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
         if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
         if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
         if str(row["step"] or "") != "4": return jsonify({"error":"Ticket ต้องอยู่ที่ Step 4 ก่อน"}), 403
         if int(row["defend_count"] or 0) < 2: return jsonify({"error":"ใช้ได้เมื่อ Defend ครบ 2 ครั้งเท่านั้น"}), 403
         if str(row["final_result"] or "").strip() != "ปรับ": return jsonify({"error":"ใช้ได้เฉพาะ ticket ที่ถูกตัดสิน ปรับ"}), 403
-        if str(row["manager_defend"] or "").strip(): return jsonify({"error":"Manager Defend ถูกใช้ไปแล้ว"}), 403
+
+        # Check if manager_defend already used
+        row2 = db_execute("SELECT COALESCE(manager_defend,'') as mgr FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if row2 and str(row2["mgr"]).strip(): return jsonify({"error":"Manager Defend ถูกใช้ไปแล้ว"}), 403
 
         db_execute("""
             UPDATE tickets SET step='3', manager_defend=%s, updated_by=%s, last_updated=NOW(),
@@ -1160,10 +1149,10 @@ def manager_defend_review(ticketid):
     if "FSO_MANAGER" not in role:
         return jsonify({"error":"เฉพาะ FSO Manager เท่านั้นที่ตัดสินได้"}), 403
     try:
-        row = db_execute("SELECT step, manager_defend FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        row = db_execute("SELECT step, COALESCE(manager_defend,'') as mgr FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
         if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
         if str(row["step"] or "") != "3": return jsonify({"error":"Ticket ไม่ได้อยู่ใน Manager Defend step"}), 403
-        if not str(row["manager_defend"] or "").strip(): return jsonify({"error":"ไม่พบ Manager Defend request"}), 403
+        if not str(row["mgr"]).strip(): return jsonify({"error":"ไม่พบ Manager Defend request"}), 403
 
         remark = str(data.get("remark","")).strip()
         db_execute("""
@@ -1177,18 +1166,12 @@ def manager_defend_review(ticketid):
             WHERE ticketid=%s
         """, (decision, remark, session.get("user"), decision, remark, decision, session.get("user"), ticketid))
         log_audit(ticketid,"FSO_MANAGER_FINAL",f"ผล:{decision}","3","4")
-        write_back_to_sheets(ticketid,{
-            "STEP":"4","FINAL_RESULT":decision,"LOCKED":"TRUE",
-            "Remark FSO Manager (Final)":remark,
-        })
+        write_back_to_sheets(ticketid,{"STEP":"4","FINAL_RESULT":decision,"LOCKED":"TRUE","Remark FSO Manager (Final)":remark})
         msg = "FSO Manager ตัดสิน: ไม่ปรับ ✅" if decision=="ไม่ปรับ" else "FSO Manager ตัดสิน: ยังปรับ 🔒"
         return jsonify({"success":True,"message":msg,"decision":decision})
     except Exception as e:
         return jsonify({"error":str(e)}), 500
 
-# ─────────────────────────────────────────────
-# Static + health
-# ─────────────────────────────────────────────
 @app.route("/system-flow.png")
 def serve_sysflow():
     return send_from_directory(app.static_folder, "system-flow.png")
