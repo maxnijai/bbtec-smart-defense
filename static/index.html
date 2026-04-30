@@ -1960,6 +1960,14 @@ function openTicket(ticket){
       && !String(ticket.MANAGER_DEFEND||'').trim()
       && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined'
       && !locked;
+    console.log('[MGR DEFEND DEBUG]', {
+      FINAL_RESULT: ticket.FINAL_RESULT,
+      DEFEND_COUNT: ticket.DEFEND_COUNT,
+      _dc,
+      MANAGER_DEFEND: ticket.MANAGER_DEFEND,
+      locked,
+      canMgrDefend
+    });
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 5 — Manager Review</div>
