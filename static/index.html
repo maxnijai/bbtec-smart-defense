@@ -198,7 +198,7 @@
   th.sort-desc .sort-icon::after{content:'↓';opacity:1}
   /* Pivot table styles */
   .pivot-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
-  .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;top:0;z-index:2}
+  .pivot-table th{padding:7px 8px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;top:0;z-index:2}
   .pivot-table tr.data-row{cursor:pointer;transition:background .12s}
   .pivot-table tr.data-row:hover td{background:#eff6ff}
   .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent)}
@@ -1502,32 +1502,29 @@ function renderPivotTable(tickets){
     <colgroup>
       <col style="width:52px">
       <col style="width:110px">
-      <col style="width:58px">
-      <col style="width:52px">
-      <col style="width:48px">
-      <col style="width:52px">
-      <col style="width:52px">
-      <col style="width:56px">
-      <col style="width:56px">
       <col style="width:60px">
-      <col style="width:68px">
-      <col style="width:72px">
-      <col style="width:72px">
-      <col style="width:72px">
+      <col style="width:58px">
+      <col style="width:58px">
+      <col style="width:58px">
+      <col style="width:60px">
+      <col style="width:63px">
+      <col style="width:70px">
+      <col style="width:75px">
+      <col style="width:75px">
+      <col style="width:75px">
     </colgroup>
     <thead>
       <tr>
         <th style="text-align:left">Region</th>
         <th style="text-align:left">Owner Group</th>
-        <th>Total</th>
-        <th style="background:#FEF3C7;color:#92400E">S1<br><span style="font-size:8px;font-weight:400">Engineer</span></th>
-        <th style="background:#FEF3C7;color:#92400E">%S1</th>
-        <th style="background:#DBEAFE;color:#1E3A8A">S2<br><span style="font-size:8px;font-weight:400">FSO</span></th>
-        <th style="background:#FFEDD5;color:#9A3412">S3<br><span style="font-size:8px;font-weight:400">Defend</span></th>
-        <th style="background:#D1FAE5;color:#064E3B">S4<br><span style="font-size:8px;font-weight:400">BBTEC Mgr</span></th>
-        <th style="background:#EDE9FE;color:#4C1D95">S5<br><span style="font-size:8px;font-weight:400">FSO Mgr</span></th>
-        <th style="background:#FEE2E2;color:#991B1B">S6<br><span style="font-size:8px;font-weight:400">ปรับ</span></th>
-        <th style="background:#D1FAE5;color:#064E3B">S6<br><span style="font-size:8px;font-weight:400">ไม่ปรับ</span></th>
+        <th style="text-align:center">Total</th>
+        <th style="background:#FEF3C7;color:#92400E;text-align:center">S1<br><span style="font-size:8px;font-weight:400">Engineer</span></th>
+        <th style="background:#DBEAFE;color:#1E3A8A;text-align:center">S2<br><span style="font-size:8px;font-weight:400">FSO</span></th>
+        <th style="background:#FFEDD5;color:#9A3412;text-align:center">S3<br><span style="font-size:8px;font-weight:400">Defend</span></th>
+        <th style="background:#D1FAE5;color:#064E3B;text-align:center">S4<br><span style="font-size:8px;font-weight:400">BBTEC Mgr</span></th>
+        <th style="background:#EDE9FE;color:#4C1D95;text-align:center">S5<br><span style="font-size:8px;font-weight:400">FSO Mgr</span></th>
+        <th style="background:#FEE2E2;color:#991B1B;text-align:center">S6<br><span style="font-size:8px;font-weight:400">ปรับ</span></th>
+        <th style="background:#D1FAE5;color:#064E3B;text-align:center">S6<br><span style="font-size:8px;font-weight:400">ไม่ปรับ</span></th>
         <th style="text-align:right">Penalty<br><span style="font-size:8px;font-weight:400">(M)</span></th>
         <th style="text-align:right">Final<br><span style="font-size:8px;font-weight:400">(M)</span></th>
         <th style="text-align:right">ลดได้<br><span style="font-size:8px;font-weight:400">(M)</span></th>
@@ -1548,7 +1545,6 @@ function renderPivotTable(tickets){
         <td class="pivot-table-td" style="font-size:10px">${gs}</td>
         <td class="pivot-table-td" style="text-align:center">${fmt(d.total)}<br><span style="font-size:9px;color:var(--muted)">${pctOf(d.total)}</span></td>
         ${nc(d.s1,'num-amber')}
-        <td class="pivot-table-td" style="text-align:center">${pctBadge(sp)}</td>
         ${nc(d.s2,'num-blue')}
         ${nc(d.s3,'num-amber')}
         ${nc(d.s4)}
@@ -1566,7 +1562,6 @@ function renderPivotTable(tickets){
       <td colspan="2" style="text-align:left;font-weight:700">🔷 ${reg} รวม</td>
       <td style="text-align:center;font-weight:700">${fmt(regT.total)}<br><span style="font-size:9px;opacity:.8">${pctOf(regT.total)}</span></td>
       <td style="text-align:center">${regT.s1||'—'}</td>
-      <td style="text-align:center">${pctBadge(rp)}</td>
       <td style="text-align:center">${regT.s2||'—'}</td>
       <td style="text-align:center">${regT.s3||'—'}</td>
       <td style="text-align:center">${regT.s4||'—'}</td>
@@ -1584,7 +1579,6 @@ function renderPivotTable(tickets){
     <td colspan="2" style="text-align:left">⭐ Grand Total NOR1+NOR2</td>
     <td style="text-align:center">${fmt(grand.total)}<br><span style="font-size:9px;opacity:.8">100%</span></td>
     <td style="text-align:center">${grand.s1||'—'}</td>
-    <td style="text-align:center">${pctBadge(gp)}</td>
     <td style="text-align:center">${grand.s2||'—'}</td>
     <td style="text-align:center">${grand.s3||'—'}</td>
     <td style="text-align:center">${grand.s4||'—'}</td>
