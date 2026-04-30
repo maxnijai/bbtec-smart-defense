@@ -1958,8 +1958,7 @@ function openTicket(ticket){
     const canMgrDefend = String(ticket.FINAL_RESULT||'').trim()==='ปรับ'
       && _dc >= 2
       && !String(ticket.MANAGER_DEFEND||'').trim()
-      && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined'
-      && !locked;
+      && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined';
     console.log('[MGR DEFEND DEBUG]', {
       FINAL_RESULT: ticket.FINAL_RESULT,
       DEFEND_COUNT: ticket.DEFEND_COUNT,
