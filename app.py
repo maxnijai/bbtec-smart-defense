@@ -172,10 +172,9 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_prod_ticket ON productivity(ticket);
     CREATE INDEX IF NOT EXISTS idx_prod_team ON productivity(team_id);
     """)
-    # Migrate: add manager_defend columns if not exists
+    # Migrate: add url_picture column if not exists (for existing deployments)
     try:
-        db_execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS manager_defend TEXT DEFAULT ''")
-        db_execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS manager_defend_remark TEXT DEFAULT ''")
+        db_execute("ALTER TABLE productivity ADD COLUMN IF NOT EXISTS url_picture TEXT DEFAULT ''")
     except Exception:
         pass
     print("✅ DB schema ready")
@@ -444,8 +443,6 @@ def ticket_to_dict(row):
     d["FINAL_RESULT"]                  = row["final_result"] or ""
     d["owner1"]                        = row["owner1"] or ""
     d["UPDATED_BY"]                    = row["updated_by"] or ""
-    d["MANAGER_DEFEND"]                = row.get("manager_defend") or ""
-    d["Manager Defend Reason"]         = row.get("manager_defend") or ""
     return d
 
 def log_audit(ticketid, action, detail="", step_from="", step_to=""):
@@ -558,7 +555,7 @@ def get_tickets():
         region   = session.get("region","")
         allowed  = [p.strip() for p in province.split(",") if p.strip() and p.upper() != "ALL"] if province and province.upper() not in ("ALL","") else []
 
-        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by, manager_defend FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
+        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
         tickets = []
         for row in (rows or []):
             t = ticket_to_dict(row)
@@ -1090,78 +1087,6 @@ def sync_productivity():
         "success": True,
         "message": "เริ่ม Sync Productivity แล้ว (90k rows ใช้เวลา ~2-3 นาที) ตรวจสอบ logs ได้ที่ Railway"
     })
-
-# ─────────────────────────────────────────────
-# Manager Defend — Request (BBTEC_MANAGER)
-# ─────────────────────────────────────────────
-@app.route("/api/ticket/<ticketid>/manager-defend/request", methods=["POST"])
-@login_required
-def manager_defend_request(ticketid):
-    data = request.json or {}
-    reason = str(data.get("reason","")).strip()
-    if not reason:
-        return jsonify({"error": "กรุณากรอกเหตุผล"}), 400
-    try:
-        row = db_execute("SELECT step, defend_count, final_result, manager_defend, locked FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
-        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
-        if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
-        if str(row["step"] or "") != "4": return jsonify({"error":"Ticket ต้องอยู่ที่ Step 4 ก่อน"}), 403
-        if int(row["defend_count"] or 0) < 2: return jsonify({"error":"ใช้ได้เมื่อ Defend ครบ 2 ครั้งเท่านั้น"}), 403
-        if str(row["final_result"] or "").strip() != "ปรับ": return jsonify({"error":"ใช้ได้เฉพาะ ticket ที่ถูกตัดสิน ปรับ"}), 403
-        if str(row["manager_defend"] or "").strip(): return jsonify({"error":"Manager Defend ถูกใช้ไปแล้ว"}), 403
-
-        db_execute("""
-            UPDATE tickets SET step='3', manager_defend=%s, updated_by=%s, last_updated=NOW(),
-                data = data || jsonb_build_object(
-                    'STEP','3','Manager Defend Reason',%s::text,'MANAGER_DEFEND',%s::text,'UPDATED_BY',%s::text
-                )
-            WHERE ticketid=%s
-        """, (reason, session.get("user"), reason, reason, session.get("user"), ticketid))
-        log_audit(ticketid,"MANAGER_DEFEND_REQUEST",f"เหตุผล:{reason[:100]}","4","3")
-        write_back_to_sheets(ticketid,{"STEP":"3","Manager Defend Reason":reason})
-        return jsonify({"success":True,"message":"ส่ง Manager Defend แล้ว รอ FSO Manager ตัดสิน"})
-    except Exception as e:
-        return jsonify({"error":str(e)}), 500
-
-# ─────────────────────────────────────────────
-# Manager Defend — Review (FSO_MANAGER only)
-# ─────────────────────────────────────────────
-@app.route("/api/ticket/<ticketid>/manager-defend/review", methods=["POST"])
-@login_required
-def manager_defend_review(ticketid):
-    data = request.json or {}
-    decision = str(data.get("decision","")).strip()
-    if decision not in ("ปรับ","ไม่ปรับ"):
-        return jsonify({"error":"กรุณาเลือกผลการพิจารณา"}), 400
-    role = str(session.get("role","")).upper().replace(" ","_")
-    if "FSO_MANAGER" not in role:
-        return jsonify({"error":"เฉพาะ FSO Manager เท่านั้นที่ตัดสินได้"}), 403
-    try:
-        row = db_execute("SELECT step, manager_defend FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
-        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
-        if str(row["step"] or "") != "3": return jsonify({"error":"Ticket ไม่ได้อยู่ใน Manager Defend step"}), 403
-        if not str(row["manager_defend"] or "").strip(): return jsonify({"error":"ไม่พบ Manager Defend request"}), 403
-
-        remark = str(data.get("remark","")).strip()
-        db_execute("""
-            UPDATE tickets SET step='4', final_result=%s, locked=TRUE,
-                manager_defend_remark=%s, updated_by=%s, last_updated=NOW(),
-                data = data || jsonb_build_object(
-                    'STEP','4','FINAL_RESULT',%s::text,'LOCKED','TRUE',
-                    'Remark FSO Manager (Final)',%s::text,
-                    'FSO พิจารณา (ปรับ/ไม่ปรับ)',%s::text,'UPDATED_BY',%s::text
-                )
-            WHERE ticketid=%s
-        """, (decision, remark, session.get("user"), decision, remark, decision, session.get("user"), ticketid))
-        log_audit(ticketid,"FSO_MANAGER_FINAL",f"ผล:{decision}","3","4")
-        write_back_to_sheets(ticketid,{
-            "STEP":"4","FINAL_RESULT":decision,"LOCKED":"TRUE",
-            "Remark FSO Manager (Final)":remark,
-        })
-        msg = "FSO Manager ตัดสิน: ไม่ปรับ ✅" if decision=="ไม่ปรับ" else "FSO Manager ตัดสิน: ยังปรับ 🔒"
-        return jsonify({"success":True,"message":msg,"decision":decision})
-    except Exception as e:
-        return jsonify({"error":str(e)}), 500
 
 # ─────────────────────────────────────────────
 # Static + health
