@@ -1137,7 +1137,6 @@ def manager_defend_request(ticketid):
     try:
         row = db_execute("SELECT step, defend_count, final_result, locked FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
         if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
-        if row["locked"]: return jsonify({"error":"Ticket ถูก Lock แล้ว"}), 403
         if str(row["step"] or "") != "4": return jsonify({"error":"Ticket ต้องอยู่ที่ Step 4 ก่อน"}), 403
         if int(row["defend_count"] or 0) < 2: return jsonify({"error":"ใช้ได้เมื่อ Defend ครบ 2 ครั้งเท่านั้น"}), 403
         if str(row["final_result"] or "").strip() != "ปรับ": return jsonify({"error":"ใช้ได้เฉพาะ ticket ที่ถูกตัดสิน ปรับ"}), 403
