@@ -204,10 +204,11 @@
   .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent)}
   .pivot-table th:first-child{text-align:left;width:52px}
   .pivot-table th:nth-child(2){text-align:left;width:110px}
-  .pivot-table th:nth-child(3),.pivot-table th:nth-child(4){width:60px}
-  .pivot-table th:nth-child(5){width:72px} /* %S1 */
-  .pivot-table th:nth-child(6),.pivot-table th:nth-child(7),.pivot-table th:nth-child(8),.pivot-table th:nth-child(9),.pivot-table th:nth-child(10){width:58px}
-  .pivot-table th:nth-child(11),.pivot-table th:nth-child(12){width:78px}
+  .pivot-table th:nth-child(3){width:55px}
+  .pivot-table th:nth-child(4){width:52px}
+  .pivot-table th:nth-child(5){width:52px}
+  .pivot-table th:nth-child(6),.pivot-table th:nth-child(7),.pivot-table th:nth-child(8),.pivot-table th:nth-child(9),.pivot-table th:nth-child(10),.pivot-table th:nth-child(11){width:50px}
+  .pivot-table th:nth-child(12),.pivot-table th:nth-child(13),.pivot-table th:nth-child(14){width:70px}
   .pivot-table td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:right;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pivot-table td:first-child{font-size:10px;color:var(--muted);text-align:left;padding-left:12px}
   .pivot-table td:nth-child(2){text-align:left;font-weight:500;color:var(--text)}
@@ -867,8 +868,8 @@ function renderKPI(d){
       </div>
     </div>
 
-    <!-- 5 Steps Row -->
-    <div style="display:grid;grid-template-columns:1.4fr 1.6fr 1.3fr 1.3fr 1.3fr;gap:10px">
+    <!-- 6 Steps Row -->
+    <div style="display:grid;grid-template-columns:1.4fr 1.6fr 1.2fr 1.2fr 1.2fr 1.2fr;gap:8px">
 
       <!-- Step 1 -->
       <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #f59e0b">
@@ -963,7 +964,7 @@ function renderKPI(d){
       <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #10b981">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div style="background:#064e3b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#6ee7b7">STEP 4</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL RESULT</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">BBTEC MANAGER</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
           <div style="text-align:center">
@@ -985,7 +986,7 @@ function renderKPI(d){
       <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #a78bfa">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div style="background:#2e1065;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#c4b5fd">STEP 5</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">MANAGER APPROVE</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FSO MANAGER</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
           <div style="text-align:center">
@@ -1000,6 +1001,50 @@ function renderKPI(d){
         <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
           <div style="font-size:10px;color:#c4b5fd">Final Penalty Amount</div>
           <div style="font-size:14px;font-weight:700;color:#a78bfa">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 6 — Final Done -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #6366f1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e1b4b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#a5b4fc">STEP 6</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL DONE</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 6 — Final Done -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;border-left:4px solid #6366f1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e1b4b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#a5b4fc">STEP 6</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL DONE</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
         </div>
       </div>
 
@@ -1446,6 +1491,9 @@ function renderPivotTable(tickets){
   if(!wrap) return;
   const fmt = n => Number(n||0).toLocaleString('th-TH');
   const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
+  const GRAND_TOTAL = tickets.filter(t=>t.TICKETID).length || 1;
+  // % เทียบ Grand Total
+  const pctG = n => n > 0 ? `<span style="display:block;font-size:9px;color:var(--muted);margin-top:1px">${(n/GRAND_TOTAL*100).toFixed(1)}%</span>` : '';
 
   // Helper: normalize group name — merge WIFI into base province group
   function normalizeGroup(ownerGroup) {
@@ -1468,19 +1516,34 @@ function renderPivotTable(tickets){
     const reg = (t.TrackB_Region||'').includes('NOR2') || (t.TRUEOWNERGROUP||'').includes('NOR2') ? 'NOR2' : 'NOR1';
     const grp = normalizeGroup(t.TRUEOWNERGROUP) || 'Unknown';
     if(!regionMap[reg]) regionMap[reg] = {};
-    if(!regionMap[reg][grp]) regionMap[reg][grp] = {total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+    if(!regionMap[reg][grp]) regionMap[reg][grp] = {total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
     const d = regionMap[reg][grp];
     d.total++;
-    const s = String(t.STEP||'');
-    if(s==='1'||s==='2'||s==='3'||s==='4'||s==='5') d.step1++;
-    if(s==='2'||s==='3'||s==='4'||s==='5') d.step2++;
-    if(s==='3') d.defend++;
-    if(t.FINAL_RESULT==='ปรับ') d.final_penalty++;
-    if(t.FINAL_RESULT==='ไม่ปรับ') d.final_no_penalty++;
-    if(s==='5') d.approved++;
+    const s = String(t.STEP||'').trim();
+    if(s==='1') d.s1++;
+    if(s==='2') d.s2++;
+    if(s==='3') d.s3++;
+    if(s==='4') d.s4++;
+    if(s==='5') d.s5++;
+    if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.s6p++;
+    if(s==='6'&&t.FINAL_RESULT==='ไม่ปรับ') d.s6n++;
     d.baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
-    if(t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+    if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
   });
+
+  // cell helper: n + % of grand total
+  function nc(n, colorClass){
+    if(!n) return '<td style="text-align:center;color:var(--muted)">—</td>';
+    const p = (n/GRAND_TOTAL*100).toFixed(1);
+    return `<td style="text-align:center" class="${colorClass||''}">${n}<span style="display:block;font-size:9px;color:var(--muted)">${p}%</span></td>`;
+  }
+
+  const GRAND_TOTAL = tickets.filter(t=>t.TICKETID).length || 1;
+  function nc(n, colorClass){
+    if(!n) return '<td style="text-align:center;color:var(--muted)">—</td>';
+    const p = (n/GRAND_TOTAL*100).toFixed(1);
+    return `<td style="text-align:center" class="${colorClass||''}">${n}<span style="display:block;font-size:9px;color:var(--muted)">${p}%</span></td>`;
+  }
 
   // %S1 heat badge: 0%=red, 1-30%=amber, 31-70%=blue, 71-99%=green, 100%=purple
   function pctBadge(pct){
@@ -1493,27 +1556,41 @@ function renderPivotTable(tickets){
   }
 
   let rows = `<table class="pivot-table">
-    <thead><tr>
-      <th>Region</th>
-      <th>Owner Group <span style="font-size:9px;opacity:.5">↗</span></th>
-      <th>Total<br>Ticket</th>
-      <th>Step1<br>Submit</th>
-      <th>%S1</th>
-      <th>Step2<br>FSO</th>
-      <th>Defend</th>
-      <th>Final<br>ปรับ</th>
-      <th>Final<br>ไม่ปรับ</th>
-      <th>Approved</th>
-      <th>Penalty<br>รวม (M)</th>
-      <th>Final<br>Penalty (M)</th>
-    </tr></thead><tbody>`;
+    <thead>
+      <tr>
+        <th rowspan="2">Region</th>
+        <th rowspan="2" style="text-align:left">Owner Group</th>
+        <th rowspan="2">Total</th>
+        <th style="background:#E6F1FB;color:#185FA5;border-bottom:0">S1<br><span style="font-size:8px">Engineer</span></th>
+        <th style="background:#E6F1FB;color:#185FA5;border-bottom:0">%S1</th>
+        <th style="background:#FAEEDA;color:#854F0B;border-bottom:0">S2<br><span style="font-size:8px">FSO</span></th>
+        <th style="background:#FAECE7;color:#993C1D;border-bottom:0">S3<br><span style="font-size:8px">Defend</span></th>
+        <th style="background:#EEEDFE;color:#534AB7;border-bottom:0">S4<br><span style="font-size:8px">Mgr</span></th>
+        <th style="background:#E1F5EE;color:#0F6E56;border-bottom:0">S5<br><span style="font-size:8px">FSO Mgr</span></th>
+        <th style="background:#FCEBEB;color:#A32D2D;border-bottom:0">S6<br><span style="font-size:8px">ปรับ</span></th>
+        <th style="background:#EAF3DE;color:#3B6D11;border-bottom:0">S6<br><span style="font-size:8px">ไม่ปรับ</span></th>
+        <th rowspan="2" style="text-align:right">Penalty<br>รวม (M)</th>
+        <th rowspan="2" style="text-align:right">Final<br>ปรับ (M)</th>
+        <th rowspan="2" style="text-align:right">ลดได้<br>(M)</th>
+      </tr>
+      <tr>
+        <th style="background:#E6F1FB;font-size:8px;color:#185FA5;padding:2px 4px">n/%</th>
+        <th style="background:#E6F1FB;font-size:8px;color:#185FA5;padding:2px 4px">%</th>
+        <th style="background:#FAEEDA;font-size:8px;color:#854F0B;padding:2px 4px">n/%</th>
+        <th style="background:#FAECE7;font-size:8px;color:#993C1D;padding:2px 4px">n/%</th>
+        <th style="background:#EEEDFE;font-size:8px;color:#534AB7;padding:2px 4px">n/%</th>
+        <th style="background:#E1F5EE;font-size:8px;color:#0F6E56;padding:2px 4px">n/%</th>
+        <th style="background:#FCEBEB;font-size:8px;color:#A32D2D;padding:2px 4px">n/%</th>
+        <th style="background:#EAF3DE;font-size:8px;color:#3B6D11;padding:2px 4px">n/%</th>
+      </tr>
+    </thead><tbody>`;
 
-  let grandTotal={total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+  let grandTotal={total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
 
   ['NOR1','NOR2'].forEach(reg => {
     if(!regionMap[reg]) return;
     const groups = Object.entries(regionMap[reg]).sort((a,b)=>b[1].total-a[1].total);
-    let regT={total:0,step1:0,step2:0,defend:0,final_penalty:0,final_no_penalty:0,approved:0,baht:0,final_baht:0};
+    let regT={total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
     groups.forEach(([grp,d])=>{
       Object.keys(regT).forEach(k=>regT[k]+=d[k]);
       const pct = d.total ? Math.round(d.step1/d.total*100) : 0;
@@ -1532,38 +1609,40 @@ function renderPivotTable(tickets){
         <td class="num-red">${fmtM(d.final_baht)}</td>
       </tr>`;
     });
-    const rpct = regT.total ? Math.round(regT.step1/regT.total*100) : 0;
+    const rpct = regT.total ? Math.round(regT.s1/regT.total*100) : 0;
     rows += `<tr class="region-row">
-      <td>🔷</td>
-      <td>${reg} รวม</td>
-      <td>${fmt(regT.total)}</td>
-      <td>${fmt(regT.step1)}</td>
-      <td>${pctBadge(rpct)}</td>
-      <td>${fmt(regT.step2)}</td>
-      <td>${fmt(regT.defend)}</td>
-      <td>${fmt(regT.final_penalty)}</td>
-      <td>${fmt(regT.final_no_penalty)}</td>
-      <td>${fmt(regT.approved)}</td>
-      <td>${fmtM(regT.baht)}</td>
-      <td>${fmtM(regT.final_baht)}</td>
+      <td colspan="2" style="text-align:left">🔷 ${reg} รวม</td>
+      <td style="text-align:center">${fmt(regT.total)}<span style="display:block;font-size:9px;opacity:.7">${(regT.total/GRAND_TOTAL*100).toFixed(1)}%</span></td>
+      <td style="text-align:center">${regT.s1||'—'}</td>
+      <td style="text-align:center">${pctBadge(rpct)}</td>
+      <td style="text-align:center">${regT.s2||'—'}</td>
+      <td style="text-align:center">${regT.s3||'—'}</td>
+      <td style="text-align:center">${regT.s4||'—'}</td>
+      <td style="text-align:center">${regT.s5||'—'}</td>
+      <td style="text-align:center;color:#A32D2D;font-weight:600">${regT.s6p||'—'}</td>
+      <td style="text-align:center;color:#0F6E56;font-weight:600">${regT.s6n||'—'}</td>
+      <td style="text-align:right">${fmtM(regT.baht)}</td>
+      <td style="text-align:right;color:#A32D2D">${fmtM(regT.final_baht)}</td>
+      <td style="text-align:right;color:#0F6E56">${fmtM(regT.baht-regT.final_baht)}</td>
     </tr>`;
     Object.keys(grandTotal).forEach(k=>grandTotal[k]+=regT[k]);
   });
 
-  const gpct = grandTotal.total ? Math.round(grandTotal.step1/grandTotal.total*100) : 0;
+  const gpct = grandTotal.total ? Math.round(grandTotal.s1/grandTotal.total*100) : 0;
   rows += `<tr class="total-row">
-    <td>⭐</td>
-    <td>ผลรวม NOR1+NOR2</td>
-    <td>${fmt(grandTotal.total)}</td>
-    <td>${fmt(grandTotal.step1)}</td>
-    <td>${pctBadge(gpct)}</td>
-    <td>${fmt(grandTotal.step2)}</td>
-    <td>${fmt(grandTotal.defend)}</td>
-    <td>${fmt(grandTotal.final_penalty)}</td>
-    <td>${fmt(grandTotal.final_no_penalty)}</td>
-    <td>${fmt(grandTotal.approved)}</td>
-    <td>${fmtM(grandTotal.baht)}</td>
-    <td>${fmtM(grandTotal.final_baht)}</td>
+    <td colspan="2" style="text-align:left">⭐ Grand Total NOR1+NOR2</td>
+    <td style="text-align:center">${fmt(grandTotal.total)}<span style="display:block;font-size:9px;opacity:.7">100%</span></td>
+    <td style="text-align:center">${grandTotal.s1||'—'}</td>
+    <td style="text-align:center">${pctBadge(gpct)}</td>
+    <td style="text-align:center">${grandTotal.s2||'—'}</td>
+    <td style="text-align:center">${grandTotal.s3||'—'}</td>
+    <td style="text-align:center">${grandTotal.s4||'—'}</td>
+    <td style="text-align:center">${grandTotal.s5||'—'}</td>
+    <td style="text-align:center;color:#A32D2D;font-weight:700">${grandTotal.s6p||'—'}</td>
+    <td style="text-align:center;color:#0F6E56;font-weight:700">${grandTotal.s6n||'—'}</td>
+    <td style="text-align:right">${fmtM(grandTotal.baht)}</td>
+    <td style="text-align:right;color:#A32D2D;font-weight:700">${fmtM(grandTotal.final_baht)}</td>
+    <td style="text-align:right;color:#0F6E56;font-weight:700">${fmtM(grandTotal.baht-grandTotal.final_baht)}</td>
   </tr></tbody></table>`;
 
   wrap.innerHTML = rows;
