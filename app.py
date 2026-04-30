@@ -172,6 +172,11 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_prod_ticket ON productivity(ticket);
     CREATE INDEX IF NOT EXISTS idx_prod_team ON productivity(team_id);
     """)
+    # Migrate: add url_picture column if not exists (for existing deployments)
+    try:
+        db_execute("ALTER TABLE productivity ADD COLUMN IF NOT EXISTS url_picture TEXT DEFAULT ''")
+    except Exception:
+        pass
     print("✅ DB schema ready")
 
 # ─────────────────────────────────────────────
