@@ -1545,8 +1545,12 @@ function renderMyTickets(){
     filtered = allTickets.filter(t => String(t.STEP||'').trim()==='3' && String(t.MANAGER_DEFEND||'').trim()!=='');
     title = 'Ticket รอ FSO Manager ตัดสิน (Manager Defend)';
   } else if(isManagerRole(role)){
-    filtered = allTickets.filter(t => t.STEP==='4');
-    title = 'Ticket รอ Manager Approve';
+    filtered = allTickets.filter(t => {
+      const s = String(t.STEP||'').trim();
+      const mgr = String(t.MANAGER_DEFEND||'').trim();
+      return s==='4' || (s==='3' && mgr!==''); // step4 + Manager Defend ที่รอ FSO Manager
+    });
+    title = 'Ticket รอ Manager / Manager Defend';
   }
 
   $('my-tickets-title').textContent = title;
@@ -1959,14 +1963,7 @@ function openTicket(ticket){
       && _dc >= 2
       && !String(ticket.MANAGER_DEFEND||'').trim()
       && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined';
-    console.log('[MGR DEFEND DEBUG]', {
-      FINAL_RESULT: ticket.FINAL_RESULT,
-      DEFEND_COUNT: ticket.DEFEND_COUNT,
-      _dc,
-      MANAGER_DEFEND: ticket.MANAGER_DEFEND,
-      locked,
-      canMgrDefend
-    });
+
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 5 — Manager Review</div>
