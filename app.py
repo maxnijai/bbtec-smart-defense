@@ -147,6 +147,30 @@ def init_db():
         synced_at TIMESTAMPTZ DEFAULT NOW()
     );
     """)
+    # Productivity table for drill down
+    db_execute("""
+    CREATE TABLE IF NOT EXISTS productivity (
+        id SERIAL PRIMARY KEY,
+        ticket TEXT,
+        plan TEXT,
+        team_id TEXT,
+        que TEXT,
+        travel_time TEXT,
+        start_repair TEXT,
+        hold TEXT,
+        link_up TEXT,
+        status_team TEXT,
+        hold_reason TEXT,
+        update_log TEXT,
+        cause1 TEXT,
+        fix_method TEXT,
+        work_detail TEXT,
+        raw_data JSONB DEFAULT '{}',
+        synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_prod_ticket ON productivity(ticket);
+    CREATE INDEX IF NOT EXISTS idx_prod_team ON productivity(team_id);
+    """)
     print("✅ DB schema ready")
 
 # ─────────────────────────────────────────────
@@ -255,7 +279,111 @@ def sync_users_from_sheets():
     except Exception as e:
         print(f"❌ User sync error: {e}")
 
-def write_back_to_sheets(ticketid, fields: dict):
+def sync_productivity_from_sheets():
+    """Sync Sheet1 (productivity/MAXMA) → DB. Handles 90k rows with batch insert."""
+    try:
+        gc = get_gc()
+        ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
+        ws = ss.worksheet(DRILLDOWN_SHEET_NAME)
+        print("🔄 Reading Sheet1 (this may take 30-60s for 90k rows)...")
+        all_vals = sheets_retry(ws.get_all_values)
+        if not all_vals:
+            return 0
+
+        # Find header row
+        header_idx = 0
+        for i, row in enumerate(all_vals[:5]):
+            if any(str(c).strip() in ('Ticket','Plan','Team ID') for c in row):
+                header_idx = i
+                break
+
+        headers = [str(h).strip() for h in all_vals[header_idx]]
+
+        # Column mapping
+        def col(name):
+            try: return headers.index(name)
+            except ValueError: return None
+
+        c_ticket  = col('Ticket')
+        c_plan    = col('Plan')
+        c_team    = col('Team ID')
+        c_que     = col('Que')
+        c_travel  = col('เวลาเดินทาง')
+        c_start   = col('เวลาเริ่มซ่อม')
+        c_hold    = col('Hold')
+        c_linkup  = col('Link Up')
+        c_status  = col('Status Team')
+        c_hreason = col('สาเหตุการ Hold')
+        c_log     = col('Update Log')
+        c_cause1  = col('สาเหตุ 1')
+        c_fix     = col('วิธีแก้ไข')
+        c_detail  = col('รายละเอียดการเก็บงาน')
+
+        def g(row, idx):
+            if idx is None or idx >= len(row): return ''
+            return str(row[idx]).strip()
+
+        data_rows = all_vals[header_idx+1:]
+        print(f"📊 Processing {len(data_rows)} rows...")
+
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                # Clear existing data
+                cur.execute("TRUNCATE TABLE productivity RESTART IDENTITY")
+
+                # Batch insert — 1000 rows at a time
+                batch_size = 1000
+                count = 0
+                for i in range(0, len(data_rows), batch_size):
+                    batch = data_rows[i:i+batch_size]
+                    values = []
+                    for row in batch:
+                        padded = row + [''] * max(0, len(headers) - len(row))
+                        row_dict = dict(zip(headers, padded))
+                        ticket_val = g(padded, c_ticket)
+                        if not ticket_val:
+                            continue
+                        values.append((
+                            ticket_val,
+                            g(padded, c_plan),
+                            g(padded, c_team),
+                            g(padded, c_que),
+                            g(padded, c_travel),
+                            g(padded, c_start),
+                            g(padded, c_hold),
+                            g(padded, c_linkup),
+                            g(padded, c_status),
+                            g(padded, c_hreason),
+                            g(padded, c_log),
+                            g(padded, c_cause1),
+                            g(padded, c_fix),
+                            g(padded, c_detail),
+                            json.dumps(row_dict),
+                        ))
+                        count += 1
+
+                    if values:
+                        cur.executemany("""
+                            INSERT INTO productivity
+                                (ticket,plan,team_id,que,travel_time,start_repair,
+                                 hold,link_up,status_team,hold_reason,update_log,
+                                 cause1,fix_method,work_detail,raw_data)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        """, values)
+
+                    if (i // batch_size) % 10 == 0:
+                        print(f"  → {count} rows inserted...")
+
+                conn.commit()
+        finally:
+            release_conn(conn)
+
+        print(f"✅ Synced {count} productivity rows")
+        return count
+    except Exception as e:
+        print(f"❌ Productivity sync error: {e}")
+        return 0
     """Write workflow fields back to Sheets async (best-effort)."""
     def _write():
         try:
@@ -843,7 +971,6 @@ DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','�
 @app.route("/api/drilldown-sheets")
 @login_required
 def list_drilldown_sheets():
-    """Debug endpoint — list all worksheet names in drilldown spreadsheet."""
     try:
         gc = get_gc()
         ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
@@ -855,60 +982,55 @@ def list_drilldown_sheets():
 @app.route("/api/drilldown/<ticketid>")
 @login_required
 def drilldown(ticketid):
+    """Fast drilldown from PostgreSQL — ~50ms vs 5-8s from Sheets."""
     try:
-        gc = get_gc()
-        ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
-        # Try exact name first, then fallback
-        ws = None
-        for name in [DRILLDOWN_SHEET_NAME, 'sheet1', 'SHEET1', 'Sheet 1']:
-            try:
-                ws = ss.worksheet(name)
-                break
-            except Exception:
-                continue
-        if ws is None:
-            ws = ss.get_worksheet(0)
-        if ws is None:
-            return jsonify({"error": "ไม่พบ worksheet"}), 404
-
-        all_vals = sheets_retry(ws.get_all_values)
-        if not all_vals:
-            return jsonify({"rows": []})
-
-        # Find header row (first row that contains 'Ticket' or 'Plan')
-        header_idx = 0
-        for i, row in enumerate(all_vals[:5]):
-            if any(str(c).strip() in ('Ticket','Plan','Team ID') for c in row):
-                header_idx = i
-                break
-
-        headers = [str(h).strip() for h in all_vals[header_idx]]
         tid_clean = str(ticketid).strip()
+        rows = db_execute("""
+            SELECT plan, team_id, que, travel_time, start_repair,
+                   hold, link_up, status_team, hold_reason, update_log,
+                   cause1, fix_method, work_detail
+            FROM productivity
+            WHERE ticket = %s
+            ORDER BY id
+        """, (tid_clean,), fetch="all")
 
-        # Find ticket column index
-        ticket_col = None
-        for i, h in enumerate(headers):
-            if h == 'Ticket' or h == 'TICKET' or h == 'ticket':
-                ticket_col = i
-                break
+        if rows is None or len(rows) == 0:
+            # Check if productivity table has data at all
+            cnt = db_execute("SELECT COUNT(*) as c FROM productivity", fetch="one")
+            if cnt and cnt["c"] == 0:
+                return jsonify({
+                    "rows": [],
+                    "message": "ยังไม่มีข้อมูล Productivity ใน DB กรุณากด Sync Productivity ก่อนครับ"
+                })
+            return jsonify({"rows": [], "total": 0})
 
-        matched_rows = []
-        for row in all_vals[header_idx+1:]:
-            padded = row + [''] * max(0, len(headers) - len(row))
-            # Search in ticket column first, then fallback to all columns
-            if ticket_col is not None:
-                if tid_clean not in str(padded[ticket_col]):
-                    continue
-            else:
-                if not any(tid_clean in str(v) for v in padded):
-                    continue
-            row_dict = dict(zip(headers, padded))
-            filtered = {c: row_dict.get(c, '') for c in DRILLDOWN_COLS}
-            matched_rows.append(filtered)
+        result = []
+        col_map = {
+            "Plan": "plan", "Team ID": "team_id", "Que": "que",
+            "เวลาเดินทาง": "travel_time", "เวลาเริ่มซ่อม": "start_repair",
+            "Hold": "hold", "Link Up": "link_up", "Status Team": "status_team",
+            "สาเหตุการ Hold": "hold_reason", "Update Log": "update_log",
+            "สาเหตุ 1": "cause1", "วิธีแก้ไข": "fix_method",
+            "รายละเอียดการเก็บงาน": "work_detail"
+        }
+        for row in rows:
+            result.append({k: row[v] or '' for k, v in col_map.items()})
 
-        return jsonify({"rows": matched_rows, "total": len(matched_rows), "sheet": ws.title})
+        return jsonify({"rows": result, "total": len(result), "source": "postgresql"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/sync/productivity", methods=["POST"])
+@login_required
+def sync_productivity():
+    """Sync Sheet1 → productivity table. Run every 3 days."""
+    def _run():
+        sync_productivity_from_sheets()
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({
+        "success": True,
+        "message": "เริ่ม Sync Productivity แล้ว (90k rows ใช้เวลา ~2-3 นาที) ตรวจสอบ logs ได้ที่ Railway"
+    })
 
 # ─────────────────────────────────────────────
 # Static + health
