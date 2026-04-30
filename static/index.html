@@ -1537,9 +1537,16 @@ function renderMyTickets(){
         || s==='3'; // กำลัง Defend อยู่
     });
     title = 'Ticket ที่รอฉัน (Engineer)';
+  } else if(isFSOManagerRole(role)){
+    // FSO Manager เห็น: Manager Defend ที่รอ review (step=3 + MANAGER_DEFEND มีค่า)
+    filtered = allTickets.filter(t => t.STEP==='3' && String(t.MANAGER_DEFEND||'').trim()!=='');
+    title = 'Ticket รอ FSO Manager ตัดสิน (Manager Defend)';
   } else if(isFSORole(role)){
-    // FSO เห็น: Engineer submit แล้ว (step 1) + Engineer ขอ Defend (step 3)
-    filtered = allTickets.filter(t => t.STEP==='1' || t.STEP==='3');
+    // FSO Zone เห็น: Engineer submit (step 1) + Engineer Defend (step 3 ที่ไม่ใช่ Manager Defend)
+    filtered = allTickets.filter(t =>
+      t.STEP==='1' ||
+      (t.STEP==='3' && String(t.MANAGER_DEFEND||'').trim()==='')
+    );
     title = 'Ticket รอ FSO พิจารณา';
   } else if(isManagerRole(role)){
     filtered = allTickets.filter(t => t.STEP==='4');
@@ -1945,19 +1952,75 @@ function openTicket(ticket){
       </div>`;
   }
 
-  // Step 5 Manager Approve
-  else if(isManagerRole(role) && (step==='4' || (!locked && step==='4'))){
+  // Step 5 Manager Approve (+ Manager Defend option)
+  else if(isManagerRole(role) && step==='4'){
+    const canMgrDefend = String(ticket.FINAL_RESULT||'').trim()==='ปรับ'
+                      && parseInt(ticket.DEFEND_COUNT||0)>=2
+                      && String(ticket.MANAGER_DEFEND||'').trim()==='';
     formHTML = `
       <div class="form-section">
-        <div class="form-section-title">STEP 5 — Manager Approve</div>
+        <div class="form-section-title">STEP 5 — Manager Review</div>
         <div style="padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:14px">
-          <div style="font-size:12px;color:var(--muted)">Final Result</div>
-          <div style="font-size:20px;font-weight:600;margin-top:4px">${resultBadge(ticket.FINAL_RESULT)}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:8px">ค่าปรับ: <b style="color:var(--text)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</b></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-size:11px;color:var(--muted)">Final Result</div>
+              <div style="font-size:18px;font-weight:600;margin-top:2px">${resultBadge(ticket.FINAL_RESULT)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--muted)">ค่าปรับ</div>
+              <div style="font-size:18px;font-weight:700;color:var(--red)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">Defend ไปแล้ว: <b style="color:var(--text)">${ticket.DEFEND_COUNT||0}/2 ครั้ง</b></div>
+        </div>
+
+        ${canMgrDefend ? `
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:4px">⚔️ Manager Defend พิเศษ</div>
+          <div style="font-size:11px;color:#78350f;margin-bottom:8px">Engineer Defend ครบ 2 ครั้งแล้ว หากมีข้อมูลเพิ่มเติม BBTEC Manager สามารถ Defend ได้อีก 1 ครั้ง โดย FSO Manager จะเป็นผู้ตัดสินขั้นสุดท้าย</div>
+          <textarea id="f-mgr-defend-reason" placeholder="กรอกเหตุผลการ Defend ของ Manager..." style="width:100%;min-height:70px;padding:8px 10px;border-radius:6px;border:1px solid #fcd34d;background:#fffbeb;color:#1a1917;font-size:12px;font-family:var(--font);resize:vertical;box-sizing:border-box"></textarea>
+        </div>` : ''}
+
+        <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          ${canMgrDefend ? `<button class="btn-submit" style="background:#f59e0b;flex:1" onclick="submitManagerDefend('${ticket.TICKETID}')">⚔️ ส่ง Manager Defend</button>` : ''}
+          <button class="btn-submit btn-sm-green" style="flex:1" onclick="submitApprove('${ticket.TICKETID}')">✓ อนุมัติ (Approve) 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // Step 3.5 FSO_MANAGER review Manager Defend
+  else if(isFSOManagerRole(role) && step==='3' && String(ticket.MANAGER_DEFEND||'').trim()!==''){
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">⚔️ Manager Defend — FSO Manager Review (ขั้นสุดท้าย)</div>
+        <div style="padding:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin-bottom:14px">
+          <div style="font-size:11px;color:#78350f;font-weight:600;margin-bottom:4px">เหตุผล Manager Defend:</div>
+          <div style="font-size:12px;color:#1a1917">${ticket.MANAGER_DEFEND||'—'}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px">
+          <div style="font-size:11px;color:var(--muted)">ค่าปรับ: <b style="color:var(--text)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</b></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Defend ก่อนหน้า: <b style="color:var(--text)">${ticket.DEFEND_COUNT||0}/2 ครั้ง</b></div>
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">ผลการพิจารณาขั้นสุดท้าย:</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button class="dec-btn" id="dec-mgr-penalty" onclick="selectMgrDecision('ปรับ')" style="padding:14px;font-size:13px">
+              🔴 ยืนยัน ปรับ
+            </button>
+            <button class="dec-btn" id="dec-mgr-no-penalty" onclick="selectMgrDecision('ไม่ปรับ')" style="padding:14px;font-size:13px">
+              🟢 ยกเว้น ไม่ปรับ
+            </button>
+          </div>
+          <input type="hidden" id="f-mgr-fso-decision" value=""/>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">หมายเหตุ FSO Manager</div>
+          <textarea id="f-mgr-remark" placeholder="เหตุผลการตัดสิน..." style="width:100%;min-height:60px;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;font-family:var(--font);resize:vertical;box-sizing:border-box"></textarea>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
-          <button class="btn-submit btn-sm-green" onclick="submitApprove('${ticket.TICKETID}')">✓ อนุมัติ (Approve) 🔒</button>
+          <button class="btn-submit" id="btn-mgr-fso-submit" onclick="submitManagerDefendReview('${ticket.TICKETID}')" disabled>✓ ยืนยันผลขั้นสุดท้าย 🔒</button>
         </div>
       </div>`;
   }
@@ -2114,6 +2177,32 @@ async function submitApprove(tid){
   apiPostSilent(`/api/ticket/${tid}/approve`, {});
 }
 
+function selectMgrDecision(val){
+  $('f-mgr-fso-decision').value = val;
+  $('dec-mgr-penalty').className   = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
+  $('dec-mgr-no-penalty').className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
+  const btn = $('btn-mgr-fso-submit');
+  if(btn) btn.disabled = false;
+}
+
+async function submitManagerDefend(tid){
+  const reason = $('f-mgr-defend-reason')?.value?.trim()||'';
+  if(!reason){ showToast('กรุณากรอกเหตุผลการ Defend','error'); return; }
+  optimisticUpdate(tid, { STEP:'3', MANAGER_DEFEND: reason });
+  closeModal(); showToast('ส่ง Manager Defend แล้ว รอ FSO Manager ตรวจสอบ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/manager-defend/request`, { reason });
+}
+
+async function submitManagerDefendReview(tid){
+  const decision = $('f-mgr-fso-decision')?.value||'';
+  if(!decision){ showToast('กรุณาเลือกผลการพิจารณา','error'); return; }
+  const remark = $('f-mgr-remark')?.value||'';
+  const fr = decision==='ไม่ปรับ' ? 'ไม่ปรับ' : 'ปรับ';
+  optimisticUpdate(tid, { STEP: decision==='ไม่ปรับ'?'4':'4', FINAL_RESULT: fr, LOCKED: 'TRUE' });
+  closeModal(); showToast(`FSO Manager ตัดสิน: ${decision} — ขั้นสุดท้าย 🔒`,'success');
+  apiPostSilent(`/api/ticket/${tid}/manager-defend/review`, { decision, remark });
+}
+
 // ── Optimistic UI helpers ──
 const _optimisticLocks = {}; // tid → timestamp of last optimistic patch
 
@@ -2158,6 +2247,10 @@ function getPatchFromUrl(url, body){
   if(url.includes('/defend/request')) return { STEP:'3' };
   if(url.includes('/defend/review'))  return { STEP:'3', FINAL_RESULT: body.decision||'' };
   if(url.includes('/accept'))   return { STEP:'4', FINAL_RESULT:'ปรับ' };
+  if(url.includes('/manager-defend/request')) return { STEP:'3' };
+  if(url.includes('/manager-defend/review'))  return { STEP:'4', LOCKED:'TRUE' };
+  if(url.includes('/manager-defend/request')) return { STEP:'3' };
+  if(url.includes('/manager-defend/review'))  return { STEP:'4', LOCKED:'TRUE' };
   if(url.includes('/approve'))  return { STEP:'5' };
   return {};
 }
@@ -2259,11 +2352,42 @@ async function apiPost(url, body){
 function exportExcel(){
   const filtered = getFilteredTickets();
   if(!filtered.length){ showToast('ไม่มีข้อมูลที่จะ export','error'); return; }
-  const cols = ['TICKETID','SUBJECT','TrackB_Region','PENALTYBAHT_TRACKB',
+  const cols = [
+    'TICKETID','SUBJECT','TrackB_Region','PENALTYBAHT_TRACKB',
     'FSO พิจารณา (ปรับ/ไม่ปรับ)','STEP','FINAL_RESULT','Owner',
-    'Group problem','Sub Problem','Overdue Detail แนบLINK รูป','แนบ LINK ชี้แจง',
-    'LAST_UPDATED','UPDATED_BY'];
-  const ws_data = [cols, ...filtered.map(t=>cols.map(c=>t[c]||''))];
+    'Group problem','Sub Problem',
+    'Overdue Detail แนบLINK รูป','แนบ LINK ชี้แจง',
+    // Remark ทุกขั้นตอน
+    'Remark Step1 (Engineer)',
+    'Remark FSO (Step2)',
+    'BBTEC Defend\nไม่สมควรปรับ',
+    'Remark Defend1 (FSO)',
+    'BBTEC Defend2\nไม่สมควรปรับ',
+    'Remark Defend2 (FSO)',
+    'Manager Defend Reason',
+    'Remark FSO Manager (Final)',
+    'Remark FSO',
+    'LAST_UPDATED','UPDATED_BY'
+  ];
+  // Build remark-merged rows
+  const ws_data = [
+    // Header row with clean names
+    ['TICKETID','SUBJECT','Province','ค่าปรับ (บาท)',
+     'FSO ตัดสิน','Step','Final','Owner',
+     'Group Problem','Sub Problem',
+     'Overdue Detail','LINK ชี้แจง',
+     'Remark Engineer (Step1)',
+     'Remark FSO (Step2)',
+     'เหตุผล Defend ครั้งที่ 1',
+     'Remark FSO หลัง Defend1',
+     'เหตุผล Defend ครั้งที่ 2',
+     'Remark FSO หลัง Defend2',
+     'เหตุผล Manager Defend',
+     'Remark FSO Manager (Final)',
+     'Remark FSO (รวม)',
+     'Last Updated','Updated By'],
+    ...filtered.map(t=>cols.map(c=>t[c]||''))
+  ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(ws_data);
   const colWidths = {'Overdue Detail แนบLINK รูป':50,'แนบ LINK ชี้แจง':45};
