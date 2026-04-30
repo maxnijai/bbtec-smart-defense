@@ -427,6 +427,30 @@ def _col_letter(idx):
         result = chr(65 + rem) + result
     return result
 
+def write_back_to_sheets(ticketid, fields: dict):
+    """Write workflow fields back to Sheets async (best-effort, non-blocking)."""
+    import threading
+    def _write():
+        try:
+            sheet = get_sheet("NOR_Penalty_Ticket")
+            all_vals = sheets_retry(sheet.get_all_values)
+            if not all_vals: return
+            headers = all_vals[0]
+            for i, row in enumerate(all_vals[1:], start=2):
+                if len(row) > 0 and str(row[0]).strip() == str(ticketid).strip():
+                    updates = []
+                    for col_name, value in fields.items():
+                        if col_name in headers:
+                            col_idx = headers.index(col_name) + 1
+                            col_letter = _col_letter(col_idx)
+                            updates.append({"range": f"{col_letter}{i}", "values": [[value]]})
+                    if updates:
+                        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
+                    break
+        except Exception as e:
+            print(f"⚠️ write_back_to_sheets error: {e}")
+    threading.Thread(target=_write, daemon=True).start()
+
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
