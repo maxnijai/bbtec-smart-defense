@@ -835,10 +835,22 @@ def sync_status():
 # Drill Down — Queue data from MAXMA sheet
 # ─────────────────────────────────────────────
 DRILLDOWN_SHEET_ID   = "1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU"
-DRILLDOWN_SHEET_NAME = "sheet1"
+DRILLDOWN_SHEET_NAME = "Sheet1"
 DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม',
                   'Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log',
                   'สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน']
+
+@app.route("/api/drilldown-sheets")
+@login_required
+def list_drilldown_sheets():
+    """Debug endpoint — list all worksheet names in drilldown spreadsheet."""
+    try:
+        gc = get_gc()
+        ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
+        sheets = [ws.title for ws in ss.worksheets()]
+        return jsonify({"sheets": sheets})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/drilldown/<ticketid>")
 @login_required
@@ -846,34 +858,54 @@ def drilldown(ticketid):
     try:
         gc = get_gc()
         ss = gc.open_by_key(DRILLDOWN_SHEET_ID)
-        # Try sheet names in order: sheet1, Sheet1, แผน, MAXMA, or first sheet
+        # Try exact name first, then fallback
         ws = None
-        try_names = [DRILLDOWN_SHEET_NAME, 'Sheet1', 'sheet1', 'SHEET1', 'แผน', 'Plan', 'MAXMA']
-        for name in try_names:
+        for name in [DRILLDOWN_SHEET_NAME, 'sheet1', 'SHEET1', 'Sheet 1']:
             try:
                 ws = ss.worksheet(name)
                 break
             except Exception:
                 continue
         if ws is None:
-            # Fallback: use first worksheet
             ws = ss.get_worksheet(0)
         if ws is None:
-            return jsonify({"error": f"ไม่พบ worksheet ใน spreadsheet นี้"}), 404
+            return jsonify({"error": "ไม่พบ worksheet"}), 404
 
         all_vals = sheets_retry(ws.get_all_values)
         if not all_vals:
             return jsonify({"rows": []})
 
-        headers = [str(h).strip() for h in all_vals[0]]
+        # Find header row (first row that contains 'Ticket' or 'Plan')
+        header_idx = 0
+        for i, row in enumerate(all_vals[:5]):
+            if any(str(c).strip() in ('Ticket','Plan','Team ID') for c in row):
+                header_idx = i
+                break
+
+        headers = [str(h).strip() for h in all_vals[header_idx]]
         tid_clean = str(ticketid).strip()
+
+        # Find ticket column index
+        ticket_col = None
+        for i, h in enumerate(headers):
+            if h == 'Ticket' or h == 'TICKET' or h == 'ticket':
+                ticket_col = i
+                break
+
         matched_rows = []
-        for row in all_vals[1:]:
+        for row in all_vals[header_idx+1:]:
             padded = row + [''] * max(0, len(headers) - len(row))
+            # Search in ticket column first, then fallback to all columns
+            if ticket_col is not None:
+                if tid_clean not in str(padded[ticket_col]):
+                    continue
+            else:
+                if not any(tid_clean in str(v) for v in padded):
+                    continue
             row_dict = dict(zip(headers, padded))
-            if any(tid_clean in str(v) for v in padded):
-                filtered = {c: row_dict.get(c, '') for c in DRILLDOWN_COLS}
-                matched_rows.append(filtered)
+            filtered = {c: row_dict.get(c, '') for c in DRILLDOWN_COLS}
+            matched_rows.append(filtered)
+
         return jsonify({"rows": matched_rows, "total": len(matched_rows), "sheet": ws.title})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
