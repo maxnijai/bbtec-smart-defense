@@ -2474,7 +2474,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 <script>
 const DRILLDOWN_SHEET_ID = '1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU';
-const DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม','Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log','สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน'];
+const DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม','Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log','สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน','URL PICTURE'];
 
 function openDrillDown(ticketId){
   $('drilldown-modal').style.display='block';
@@ -2520,7 +2520,11 @@ function renderDrillDown(rows, ticketId){
     tbl+=`<tr style="background:${i%2===0?'transparent':'var(--bg3)'}">`;
     DRILLDOWN_COLS.forEach(c=>{
       const v = row[c]||'—';
-      tbl+=`<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(v).replace(/"/g,'&quot;')}">${v}</td>`;
+      let display = v;
+      if(c==='URL PICTURE' && v && v!=='—'){
+        display=`<a href="${v}" target="_blank" style="color:var(--accent);font-weight:600;white-space:nowrap">📷 ดูรูป ↗</a>`;
+      }
+      tbl+=`<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(v).replace(/"/g,'&quot;')}">${display}</td>`;
     });
     tbl+='</tr>';
   });
