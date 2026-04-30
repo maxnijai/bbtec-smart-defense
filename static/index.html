@@ -438,6 +438,7 @@
           <div class="user-role" id="sb-role">—</div>
         </div>
       </div>
+      <button onclick="openChangePassword()" style="width:100%;margin-bottom:6px;padding:7px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 เปลี่ยนรหัสผ่าน</button>
       <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
     </div>
   </div>
@@ -2458,6 +2459,180 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch(e){}
 });
 </script>
+<!-- ── Change Password Modal ── -->
+<div id="chgpwd-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:4000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;margin:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <!-- Header -->
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px">🔑</div>
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--text)">เปลี่ยนรหัสผ่าน</div>
+        <div style="font-size:11px;color:var(--muted)" id="chgpwd-username"></div>
+      </div>
+      <button onclick="closeChangePassword()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">✕</button>
+    </div>
+    <!-- Body -->
+    <div style="padding:24px">
+      <!-- Current password -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">รหัสผ่านปัจจุบัน</label>
+        <div style="position:relative">
+          <input id="cp-old" type="password" placeholder="กรอกรหัสผ่านเดิม" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-old',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+      </div>
+      <!-- New password -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">รหัสผ่านใหม่</label>
+        <div style="position:relative">
+          <input id="cp-new" type="password" placeholder="อย่างน้อย 8 ตัวอักษร" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" oninput="checkPwdStrength(this.value)" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-new',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+        <!-- Strength bar -->
+        <div style="margin-top:8px">
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div id="pwd-strength-bar" style="height:100%;width:0%;border-radius:2px;transition:all .3s"></div>
+          </div>
+          <div id="pwd-strength-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
+        </div>
+      </div>
+      <!-- Confirm password -->
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">ยืนยันรหัสผ่านใหม่</label>
+        <div style="position:relative">
+          <input id="cp-confirm" type="password" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" oninput="checkPwdMatch()" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-confirm',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+        <div id="cp-match-msg" style="font-size:10px;margin-top:4px"></div>
+      </div>
+      <!-- Error / success message -->
+      <div id="cp-msg" style="font-size:12px;padding:8px 12px;border-radius:8px;display:none;margin-bottom:16px"></div>
+      <!-- Actions -->
+      <div style="display:flex;gap:10px">
+        <button onclick="closeChangePassword()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font)">ยกเลิก</button>
+        <button id="cp-submit-btn" onclick="submitChangePassword()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:opacity .15s">บันทึกรหัสผ่านใหม่</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openChangePassword(){
+  const el = $('chgpwd-overlay');
+  el.style.display = 'flex';
+  $('chgpwd-username').textContent = `ผู้ใช้: ${currentUser?.user||''} (${currentUser?.role||''})`;
+  $('cp-old').value = '';
+  $('cp-new').value = '';
+  $('cp-confirm').value = '';
+  $('cp-msg').style.display = 'none';
+  $('pwd-strength-bar').style.width = '0%';
+  $('pwd-strength-label').textContent = '';
+  $('cp-match-msg').textContent = '';
+  $('cp-old').focus();
+}
+
+function closeChangePassword(){
+  $('chgpwd-overlay').style.display = 'none';
+}
+
+function togglePwd(inputId, btn){
+  const inp = $(inputId);
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function checkPwdStrength(pw){
+  const bar = $('pwd-strength-bar');
+  const label = $('pwd-strength-label');
+  if(!pw){ bar.style.width='0%'; label.textContent=''; return; }
+  let score = 0;
+  if(pw.length >= 8) score++;
+  if(pw.length >= 12) score++;
+  if(/[A-Z]/.test(pw)) score++;
+  if(/[0-9]/.test(pw)) score++;
+  if(/[^A-Za-z0-9]/.test(pw)) score++;
+  const levels = [
+    {w:'20%',c:'#ef4444',t:'อ่อนมาก'},
+    {w:'40%',c:'#f97316',t:'อ่อน'},
+    {w:'60%',c:'#eab308',t:'ปานกลาง'},
+    {w:'80%',c:'#22c55e',t:'แข็งแกร่ง'},
+    {w:'100%',c:'#10b981',t:'แข็งแกร่งมาก'},
+  ];
+  const l = levels[Math.min(score-1, 4)] || levels[0];
+  bar.style.width = l.w;
+  bar.style.background = l.c;
+  label.textContent = `ความแข็งแกร่ง: ${l.t}`;
+  label.style.color = l.c;
+}
+
+function checkPwdMatch(){
+  const nw = $('cp-new').value;
+  const cf = $('cp-confirm').value;
+  const msg = $('cp-match-msg');
+  if(!cf){ msg.textContent=''; return; }
+  if(nw === cf){
+    msg.textContent = '✅ รหัสผ่านตรงกัน';
+    msg.style.color = '#22c55e';
+  } else {
+    msg.textContent = '❌ รหัสผ่านไม่ตรงกัน';
+    msg.style.color = '#ef4444';
+  }
+}
+
+async function submitChangePassword(){
+  const oldPwd = $('cp-old').value.trim();
+  const newPwd = $('cp-new').value;
+  const confirm = $('cp-confirm').value;
+  const msgEl = $('cp-msg');
+  const btn = $('cp-submit-btn');
+
+  const showMsg = (text, ok) => {
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.style.background = ok ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)';
+    msgEl.style.color = ok ? '#22c55e' : '#ef4444';
+    msgEl.style.border = `1px solid ${ok ? '#22c55e' : '#ef4444'}`;
+  };
+
+  if(!oldPwd){ showMsg('กรุณากรอกรหัสผ่านเดิม', false); return; }
+  if(newPwd.length < 8){ showMsg('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร', false); return; }
+  if(newPwd !== confirm){ showMsg('รหัสผ่านใหม่ไม่ตรงกัน', false); return; }
+  if(oldPwd === newPwd){ showMsg('รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม', false); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+
+  try {
+    const res = await fetch(`${API}/api/change-password`, {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+    });
+    const data = await res.json();
+    if(data.success){
+      showMsg('✅ เปลี่ยนรหัสผ่านสำเร็จ!', true);
+      setTimeout(closeChangePassword, 1500);
+    } else {
+      showMsg(data.error || 'เกิดข้อผิดพลาด', false);
+    }
+  } catch(e){
+    showMsg('ไม่สามารถเชื่อมต่อ Server', false);
+  }
+  btn.disabled = false;
+  btn.textContent = 'บันทึกรหัสผ่านใหม่';
+}
+
+// Close on overlay click
+document.addEventListener('click', e => {
+  if(e.target === $('chgpwd-overlay')) closeChangePassword();
+});
+</script>
+
 <!-- ── Drill Down Modal ── -->
 <div id="drilldown-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:20px">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;max-width:1100px;margin:0 auto;overflow:hidden">
