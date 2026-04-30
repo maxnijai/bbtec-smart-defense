@@ -165,6 +165,7 @@ def init_db():
         cause1 TEXT,
         fix_method TEXT,
         work_detail TEXT,
+        url_picture TEXT,
         raw_data JSONB DEFAULT '{}',
         synced_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -318,6 +319,7 @@ def sync_productivity_from_sheets():
         c_cause1  = col('สาเหตุ 1')
         c_fix     = col('วิธีแก้ไข')
         c_detail  = col('รายละเอียดการเก็บงาน')
+        c_urlpic  = col('URL PICTURE')
 
         def g(row, idx):
             if idx is None or idx >= len(row): return ''
@@ -359,6 +361,7 @@ def sync_productivity_from_sheets():
                             g(padded, c_cause1),
                             g(padded, c_fix),
                             g(padded, c_detail),
+                            g(padded, c_urlpic),
                             json.dumps(row_dict),
                         ))
                         count += 1
@@ -368,8 +371,8 @@ def sync_productivity_from_sheets():
                             INSERT INTO productivity
                                 (ticket,plan,team_id,que,travel_time,start_repair,
                                  hold,link_up,status_team,hold_reason,update_log,
-                                 cause1,fix_method,work_detail,raw_data)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                 cause1,fix_method,work_detail,url_picture,raw_data)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         """, values)
 
                     if (i // batch_size) % 10 == 0:
@@ -966,7 +969,7 @@ DRILLDOWN_SHEET_ID   = "1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU"
 DRILLDOWN_SHEET_NAME = "Sheet1"
 DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม',
                   'Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log',
-                  'สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน']
+                  'สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน','URL PICTURE']
 
 @app.route("/api/drilldown-sheets")
 @login_required
@@ -988,14 +991,13 @@ def drilldown(ticketid):
         rows = db_execute("""
             SELECT plan, team_id, que, travel_time, start_repair,
                    hold, link_up, status_team, hold_reason, update_log,
-                   cause1, fix_method, work_detail
+                   cause1, fix_method, work_detail, url_picture
             FROM productivity
             WHERE ticket = %s
             ORDER BY id
         """, (tid_clean,), fetch="all")
 
         if rows is None or len(rows) == 0:
-            # Check if productivity table has data at all
             cnt = db_execute("SELECT COUNT(*) as c FROM productivity", fetch="one")
             if cnt and cnt["c"] == 0:
                 return jsonify({
@@ -1011,7 +1013,8 @@ def drilldown(ticketid):
             "Hold": "hold", "Link Up": "link_up", "Status Team": "status_team",
             "สาเหตุการ Hold": "hold_reason", "Update Log": "update_log",
             "สาเหตุ 1": "cause1", "วิธีแก้ไข": "fix_method",
-            "รายละเอียดการเก็บงาน": "work_detail"
+            "รายละเอียดการเก็บงาน": "work_detail",
+            "URL PICTURE": "url_picture"
         }
         for row in rows:
             result.append({k: row[v] or '' for k, v in col_map.items()})
