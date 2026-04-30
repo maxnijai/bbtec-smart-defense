@@ -839,6 +839,7 @@ def accept_penalty(ticketid):
 @app.route("/api/ticket/<ticketid>/approve", methods=["POST"])
 @login_required
 def manager_approve(ticketid):
+    """BBTEC Manager อนุมัติ → ส่งต่อ FSO Manager (Step 5)"""
     try:
         row = db_execute("SELECT step, final_result FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
         if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
@@ -847,12 +848,16 @@ def manager_approve(ticketid):
 
         db_execute("""
             UPDATE tickets SET step='5', updated_by=%s, last_updated=NOW(),
-                data = data || jsonb_build_object('STEP','5','UPDATED_BY',%s::text,'Reviewer',%s::text)
+                data = data || jsonb_build_object(
+                    'STEP','5','UPDATED_BY',%s::text,
+                    'BBTEC Manager',%s::text,
+                    'BBTEC Manager Action','อนุมัติ'
+                )
             WHERE ticketid=%s
         """, (session.get("user"), session.get("user"), session.get("name"), ticketid))
-        log_audit(ticketid,"MANAGER_APPROVE","อนุมัติ","4","5")
-        write_back_to_sheets(ticketid,{"STEP":"5","Reviewer":session.get("name","")})
-        return jsonify({"success": True, "message": "Manager อนุมัติสำเร็จ"})
+        log_audit(ticketid,"MANAGER_APPROVE","BBTEC Manager อนุมัติ → รอ FSO Manager","4","5")
+        write_back_to_sheets(ticketid,{"STEP":"5","BBTEC Manager":session.get("name",""),"BBTEC Manager Action":"อนุมัติ"})
+        return jsonify({"success": True, "message": "BBTEC Manager อนุมัติแล้ว — รอ FSO Manager Final Approve"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1127,6 +1132,68 @@ def sync_productivity():
 # ─────────────────────────────────────────────
 # Manager Defend — Request (BBTEC_MANAGER)
 # ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# FSO Manager — Final Approve (หลัง BBTEC Manager อนุมัติ)
+# ─────────────────────────────────────────────
+@app.route("/api/ticket/<ticketid>/fso-manager-approve", methods=["POST"])
+@login_required
+def fso_manager_approve(ticketid):
+    """FSO Manager Final Approve — จบกระบวนการ"""
+    role = str(session.get("role","")).upper().replace(" ","_")
+    if "FSO_MANAGER" not in role:
+        return jsonify({"error":"เฉพาะ FSO Manager เท่านั้น"}), 403
+    try:
+        row = db_execute("SELECT step, final_result, manager_defend FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
+        if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
+        if str(row["step"] or "") != "5":
+            return jsonify({"error":"Ticket ต้องอยู่ที่ Step 5"}), 403
+
+        data_req = request.json or {}
+        decision = str(data_req.get("decision", row["final_result"] or "ปรับ")).strip()
+        remark   = str(data_req.get("remark","")).strip()
+
+        db_execute("""
+            UPDATE tickets SET step='6', final_result=%s, locked=TRUE,
+                updated_by=%s, last_updated=NOW(),
+                data = data || jsonb_build_object(
+                    'STEP','6','FINAL_RESULT',%s::text,'LOCKED','TRUE',
+                    'FSO Manager Final',%s::text,
+                    'Remark FSO Manager (Final)',%s::text,'UPDATED_BY',%s::text
+                )
+            WHERE ticketid=%s
+        """, (decision, session.get("user"), decision, session.get("name"), remark, session.get("user"), ticketid))
+        log_audit(ticketid,"FSO_MANAGER_FINAL_APPROVE",f"ผล:{decision}","5","6")
+        write_back_to_sheets(ticketid,{
+            "STEP":"6","FINAL_RESULT":decision,"LOCKED":"TRUE",
+            "FSO Manager Final":session.get("name",""),
+            "Remark FSO Manager (Final)":remark,
+        })
+        msg = f"FSO Manager อนุมัติ Final: {decision} 🔒 — กระบวนการเสร็จสิ้น"
+        return jsonify({"success":True,"message":msg,"decision":decision})
+    except Exception as e:
+        return jsonify({"error":str(e)}), 500
+
+@app.route("/api/ticket/<ticketid>/reset-manager-defend", methods=["POST"])
+@login_required
+def reset_manager_defend(ticketid):
+    """Reset manager defend — for testing/correction by BBTEC_MANAGER only."""
+    role = str(session.get("role","")).upper().replace(" ","_")
+    if "MANAGER" not in role:
+        return jsonify({"error":"เฉพาะ Manager เท่านั้น"}), 403
+    try:
+        db_execute("""
+            UPDATE tickets SET
+                manager_defend='', manager_defend_remark='',
+                updated_by=%s, last_updated=NOW(),
+                data = data - 'Manager Defend Reason' - 'MANAGER_DEFEND'
+            WHERE ticketid=%s
+        """, (session.get("user"), ticketid))
+        log_audit(ticketid, "RESET_MANAGER_DEFEND", "ล้าง Manager Defend", "", "")
+        return jsonify({"success": True, "message": "ล้าง Manager Defend สำเร็จ"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/ticket/<ticketid>/manager-defend/request", methods=["POST"])
 @login_required
 def manager_defend_request(ticketid):
@@ -1146,15 +1213,16 @@ def manager_defend_request(ticketid):
         if row2 and str(row2["mgr"]).strip(): return jsonify({"error":"Manager Defend ถูกใช้ไปแล้ว"}), 403
 
         db_execute("""
-            UPDATE tickets SET step='3', manager_defend=%s, updated_by=%s, last_updated=NOW(),
+            UPDATE tickets SET step='5', manager_defend=%s, updated_by=%s, last_updated=NOW(),
                 data = data || jsonb_build_object(
-                    'STEP','3','Manager Defend Reason',%s::text,'MANAGER_DEFEND',%s::text,'UPDATED_BY',%s::text
+                    'STEP','5','Manager Defend Reason',%s::text,'MANAGER_DEFEND',%s::text,
+                    'BBTEC Manager Action','Manager Defend','UPDATED_BY',%s::text
                 )
             WHERE ticketid=%s
         """, (reason, session.get("user"), reason, reason, session.get("user"), ticketid))
-        log_audit(ticketid,"MANAGER_DEFEND_REQUEST",f"เหตุผล:{reason[:100]}","4","3")
-        write_back_to_sheets(ticketid,{"STEP":"3","Manager Defend Reason":reason})
-        return jsonify({"success":True,"message":"ส่ง Manager Defend แล้ว รอ FSO Manager ตัดสิน"})
+        log_audit(ticketid,"MANAGER_DEFEND_REQUEST",f"เหตุผล:{reason[:100]}","4","5")
+        write_back_to_sheets(ticketid,{"STEP":"5","Manager Defend Reason":reason,"BBTEC Manager Action":"Manager Defend"})
+        return jsonify({"success":True,"message":"ส่ง Manager Defend แล้ว — รอ FSO Manager ตัดสินขั้นสุดท้าย"})
     except Exception as e:
         return jsonify({"error":str(e)}), 500
 
@@ -1174,15 +1242,15 @@ def manager_defend_review(ticketid):
     try:
         row = db_execute("SELECT step, COALESCE(manager_defend,'') as mgr FROM tickets WHERE ticketid=%s", (ticketid,), fetch="one")
         if not row: return jsonify({"error":"ไม่พบ Ticket"}), 404
-        if str(row["step"] or "") != "3": return jsonify({"error":"Ticket ไม่ได้อยู่ใน Manager Defend step"}), 403
+        if str(row["step"] or "") != "5": return jsonify({"error":"Ticket ต้องอยู่ที่ Step 5 รอ FSO Manager"}), 403
         if not str(row["mgr"]).strip(): return jsonify({"error":"ไม่พบ Manager Defend request"}), 403
 
         remark = str(data.get("remark","")).strip()
         db_execute("""
-            UPDATE tickets SET step='4', final_result=%s, locked=TRUE,
+            UPDATE tickets SET step='6', final_result=%s, locked=TRUE,
                 manager_defend_remark=%s, updated_by=%s, last_updated=NOW(),
                 data = data || jsonb_build_object(
-                    'STEP','4','FINAL_RESULT',%s::text,'LOCKED','TRUE',
+                    'STEP','6','FINAL_RESULT',%s::text,'LOCKED','TRUE',
                     'Remark FSO Manager (Final)',%s::text,
                     'FSO พิจารณา (ปรับ/ไม่ปรับ)',%s::text,'UPDATED_BY',%s::text
                 )
