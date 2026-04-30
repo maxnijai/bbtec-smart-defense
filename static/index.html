@@ -2098,20 +2098,20 @@ function forceCloseModal(){
 }
 
 function selectDecision(val){
-  // Set hidden value
-  const fsoInput = document.getElementById('f-fso-decision');
-  if(fsoInput) fsoInput.value = val;
+  // Set ALL hidden f-fso-decision inputs in page
+  document.querySelectorAll('[id="f-fso-decision"]').forEach(el => el.value = val);
 
-  // Update button styles — search within modal
-  const modal = document.getElementById('modal-overlay');
-  const penaltyBtn   = modal ? modal.querySelector('#dec-penalty')    : document.getElementById('dec-penalty');
-  const noPenaltyBtn = modal ? modal.querySelector('#dec-no-penalty') : document.getElementById('dec-no-penalty');
-  if(penaltyBtn)   penaltyBtn.className   = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
-  if(noPenaltyBtn) noPenaltyBtn.className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
+  // Update ALL dec-penalty buttons
+  document.querySelectorAll('[id="dec-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ปรับ'?' selected-penalty':''));
+  document.querySelectorAll('[id="dec-no-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':''));
 
-  // Enable submit button — search within modal
-  const btn = modal ? modal.querySelector('#btn-fso-submit') : document.getElementById('btn-fso-submit');
-  if(btn) btn.disabled = false;
+  // Enable ALL btn-fso-submit buttons
+  document.querySelectorAll('[id="btn-fso-submit"]').forEach(el => {
+    el.disabled = false;
+    el.style.opacity = '1';
+  });
 }
 
 // ── Defend inline form ──
@@ -2170,7 +2170,7 @@ async function submitStep1(tid){
 }
 
 async function submitStep2(tid){
-  const decision = $('f-fso-decision')?.value||'';
+  const decision = [...document.querySelectorAll('[id="f-fso-decision"]')].pop()?.value||'';
   if(!decision){ showToast('กรุณาเลือก ปรับ หรือ ไม่ปรับ','error'); return; }
   const body = { fso_decision: decision, remark: $('f-remark')?.value||'' };
   optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision, FINAL_RESULT: decision === 'ปรับ' ? 'ปรับ' : '' });
@@ -2191,7 +2191,7 @@ async function submitDefendRequest(tid){
 }
 
 async function submitDefendReview(tid){
-  const decision = $('f-fso-decision')?.value||'';
+  const decision = [...document.querySelectorAll('[id="f-fso-decision"]')].pop()?.value||'';
   if(!decision){ showToast('กรุณาเลือกผล','error'); return; }
   const body = { decision, remark: $('f-remark')?.value||'' };
   optimisticUpdate(tid, { STEP:'3', FINAL_RESULT: decision });
@@ -2206,11 +2206,15 @@ async function submitApprove(tid){
 }
 
 function selectMgrDecision(val){
-  $('f-mgr-fso-decision').value = val;
-  $('dec-mgr-penalty').className   = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
-  $('dec-mgr-no-penalty').className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
-  const btn = $('btn-mgr-fso-submit');
-  if(btn) btn.disabled = false;
+  document.querySelectorAll('[id="f-mgr-fso-decision"]').forEach(el => el.value = val);
+  document.querySelectorAll('[id="dec-mgr-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ปรับ'?' selected-penalty':''));
+  document.querySelectorAll('[id="dec-mgr-no-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':''));
+  document.querySelectorAll('[id="btn-mgr-fso-submit"]').forEach(el => {
+    el.disabled = false;
+    el.style.opacity = '1';
+  });
 }
 
 async function submitManagerDefend(tid){
