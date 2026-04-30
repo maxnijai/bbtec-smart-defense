@@ -1311,7 +1311,47 @@ async function syncProductivity(btn){
 }
 
 async function syncFromSheets(btn){
-  if(!confirm('Sync ข้อมูลจาก Google Sheets → Database?\n\nTicket ที่ลบออกจาก Sheets จะถูกลบออกจาก DB ด้วย')) return;
+  // ── ตรวจสอบ ticket ที่อยู่ระหว่าง workflow ก่อน Sync ──
+  const inProgress = allTickets.filter(t => {
+    const s = String(t.STEP||'').trim();
+    return s==='1' || s==='2' || s==='3' || s==='4' || s==='5';
+  });
+
+  // แบ่งกลุ่มตาม step
+  const groups = {
+    '1': inProgress.filter(t=>t.STEP==='1').length,
+    '2': inProgress.filter(t=>t.STEP==='2').length,
+    '3': inProgress.filter(t=>t.STEP==='3').length,
+    '4': inProgress.filter(t=>t.STEP==='4').length,
+    '5': inProgress.filter(t=>t.STEP==='5').length,
+  };
+
+  let warningMsg = '⬇️ Sync ข้อมูลจาก Google Sheets → Database\n\n';
+
+  if(inProgress.length > 0){
+    warningMsg += `⚠️  คำเตือน: พบ ${inProgress.length} ticket ที่กำลังดำเนินการอยู่!\n\n`;
+    if(groups['1']) warningMsg += `  • Step 1 (รอ FSO):       ${groups['1']} ticket\n`;
+    if(groups['2']) warningMsg += `  • Step 2 (FSO ตัดสินแล้ว): ${groups['2']} ticket\n`;
+    if(groups['3']) warningMsg += `  • Step 3 (กำลัง Defend):  ${groups['3']} ticket\n`;
+    if(groups['4']) warningMsg += `  • Step 4 (รอ Manager):    ${groups['4']} ticket\n`;
+    if(groups['5']) warningMsg += `  • Step 5 (รอ FSO Manager): ${groups['5']} ticket\n`;
+    warningMsg += '\n⛔ ถ้า Google Sheets ไม่มีข้อมูล workflow เหล่านี้\n';
+    warningMsg += '   ticket จะถูก RESET กลับไปเป็น Step 0!\n\n';
+    warningMsg += '✅ ควร Sync เฉพาะเมื่อ Sheets มีข้อมูลครบถ้วน\n\n';
+    warningMsg += 'ยืนยันที่จะ Sync ต่อไปหรือไม่?';
+  } else {
+    warningMsg += '✅ ไม่มี ticket ที่กำลังดำเนินการอยู่\n';
+    warningMsg += 'Ticket ที่ลบออกจาก Sheets จะถูกลบออกจาก DB ด้วย\n\n';
+    warningMsg += 'ยืนยัน Sync?';
+  }
+
+  if(!confirm(warningMsg)) return;
+
+  // ถ้ามี ticket in-progress ให้ confirm อีกครั้ง
+  if(inProgress.length > 0){
+    if(!confirm(`⚠️ ยืนยันอีกครั้ง\n\nคุณแน่ใจหรือไม่ที่จะ Sync ทั้งที่มี ${inProgress.length} ticket กำลังดำเนินการอยู่?`)) return;
+  }
+
   if(btn){ btn.disabled=true; btn.textContent='⏳ Syncing...'; }
   try {
     const res = await fetch(`${API}/api/sync`, {method:'POST', credentials:'include'});
