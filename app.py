@@ -210,32 +210,36 @@ def sync_tickets_from_sheets():
                     tid = str(r.get("TICKETID","")).strip()
                     if not tid:
                         continue
-                    # Sheets is master — take ALL fields from Sheets including step/fso/final
-                    step         = str(r.get("STEP","")).strip()
-                    defend_count = int(r.get("DEFEND_COUNT",0) or 0)
-                    locked       = str(r.get("LOCKED","")).upper() == "TRUE"
-                    fso_decision = str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip()
-                    final_result = str(r.get("FINAL_RESULT","")).strip()
-                    owner1       = str(r.get("owner1","")).strip()
-                    updated_by   = str(r.get("UPDATED_BY","")).strip()
+                    # Sheets is master — take ALL fields including manager_defend
+                    step           = str(r.get("STEP","")).strip()
+                    defend_count   = int(r.get("DEFEND_COUNT",0) or 0)
+                    locked         = str(r.get("LOCKED","")).upper() == "TRUE"
+                    fso_decision   = str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip()
+                    final_result   = str(r.get("FINAL_RESULT","")).strip()
+                    owner1         = str(r.get("owner1","")).strip()
+                    updated_by     = str(r.get("UPDATED_BY","")).strip()
+                    # Manager Defend — sync จาก Sheets column "Manager Defend Reason"
+                    manager_defend = str(r.get("Manager Defend Reason","")).strip()
 
                     cur.execute("""
                         INSERT INTO tickets
                             (ticketid, data, step, defend_count, locked,
-                             fso_decision, final_result, owner1, updated_by, synced_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                             fso_decision, final_result, owner1, updated_by,
+                             manager_defend, synced_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
                         ON CONFLICT (ticketid) DO UPDATE SET
-                            data         = EXCLUDED.data,
-                            step         = EXCLUDED.step,
-                            defend_count = EXCLUDED.defend_count,
-                            locked       = EXCLUDED.locked,
-                            fso_decision = EXCLUDED.fso_decision,
-                            final_result = EXCLUDED.final_result,
-                            owner1       = EXCLUDED.owner1,
-                            updated_by   = EXCLUDED.updated_by,
-                            synced_at    = NOW()
+                            data           = EXCLUDED.data,
+                            step           = EXCLUDED.step,
+                            defend_count   = EXCLUDED.defend_count,
+                            locked         = EXCLUDED.locked,
+                            fso_decision   = EXCLUDED.fso_decision,
+                            final_result   = EXCLUDED.final_result,
+                            owner1         = EXCLUDED.owner1,
+                            updated_by     = EXCLUDED.updated_by,
+                            manager_defend = EXCLUDED.manager_defend,
+                            synced_at      = NOW()
                     """, (tid, json.dumps(r), step, defend_count, locked,
-                          fso_decision, final_result, owner1, updated_by))
+                          fso_decision, final_result, owner1, updated_by, manager_defend))
                     count += 1
 
                 # Delete tickets no longer in Sheets
@@ -1190,6 +1194,8 @@ def reset_manager_defend(ticketid):
             WHERE ticketid=%s
         """, (session.get("user"), ticketid))
         log_audit(ticketid, "RESET_MANAGER_DEFEND", "ล้าง Manager Defend", "", "")
+        # Write empty back to Sheets so sync is consistent
+        write_back_to_sheets(ticketid, {"Manager Defend Reason": "", "BBTEC Manager Action": ""})
         return jsonify({"success": True, "message": "ล้าง Manager Defend สำเร็จ"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
