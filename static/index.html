@@ -1493,33 +1493,39 @@ function renderPivotTable(tickets){
   const eD = ()=>({total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,fb:0});
   const aD = (a,b)=>{ Object.keys(a).forEach(k=>a[k]+=b[k]); };
 
-  let rows = `<table class="pivot-table" style="min-width:900px">
+  let rows = `<table class="pivot-table" style="width:100%;table-layout:fixed;border-collapse:collapse">
+    <colgroup>
+      <col style="width:52px">
+      <col style="width:110px">
+      <col style="width:58px">
+      <col style="width:52px">
+      <col style="width:48px">
+      <col style="width:52px">
+      <col style="width:52px">
+      <col style="width:56px">
+      <col style="width:56px">
+      <col style="width:60px">
+      <col style="width:68px">
+      <col style="width:72px">
+      <col style="width:72px">
+      <col style="width:72px">
+    </colgroup>
     <thead>
       <tr>
-        <th rowspan="2" style="text-align:left;min-width:48px">Region</th>
-        <th rowspan="2" style="text-align:left;min-width:105px">Owner Group</th>
-        <th rowspan="2" style="min-width:54px">Total</th>
-        <th style="background:#FEF3C7;color:#92400E;border-bottom:0">S1</th>
-        <th style="background:#FEF3C7;color:#92400E;border-bottom:0">%S1</th>
-        <th style="background:#DBEAFE;color:#1E3A8A;border-bottom:0">S2</th>
-        <th style="background:#FFEDD5;color:#9A3412;border-bottom:0">S3</th>
-        <th style="background:#D1FAE5;color:#064E3B;border-bottom:0">S4</th>
-        <th style="background:#EDE9FE;color:#4C1D95;border-bottom:0">S5</th>
-        <th style="background:#FEE2E2;color:#991B1B;border-bottom:0">S6 ปรับ</th>
-        <th style="background:#D1FAE5;color:#064E3B;border-bottom:0">S6 ไม่ปรับ</th>
-        <th rowspan="2" style="text-align:right;min-width:68px">Penalty (M)</th>
-        <th rowspan="2" style="text-align:right;min-width:68px">Final (M)</th>
-        <th rowspan="2" style="text-align:right;min-width:68px">ลดได้ (M)</th>
-      </tr>
-      <tr>
-        <th style="background:#FEF3C7;font-size:9px;color:#78350F;padding:2px 4px">Engineer</th>
-        <th style="background:#FEF3C7;font-size:9px;color:#78350F;padding:2px 4px">n/%</th>
-        <th style="background:#DBEAFE;font-size:9px;color:#1E40AF;padding:2px 4px">FSO</th>
-        <th style="background:#FFEDD5;font-size:9px;color:#9A3412;padding:2px 4px">Defend</th>
-        <th style="background:#D1FAE5;font-size:9px;color:#065F46;padding:2px 4px">BBTEC Mgr</th>
-        <th style="background:#EDE9FE;font-size:9px;color:#4C1D95;padding:2px 4px">FSO Mgr</th>
-        <th style="background:#FEE2E2;font-size:9px;color:#991B1B;padding:2px 4px">n/%</th>
-        <th style="background:#D1FAE5;font-size:9px;color:#065F46;padding:2px 4px">n/%</th>
+        <th style="text-align:left">Region</th>
+        <th style="text-align:left">Owner Group</th>
+        <th>Total</th>
+        <th style="background:#FEF3C7;color:#92400E">S1<br><span style="font-size:8px;font-weight:400">Engineer</span></th>
+        <th style="background:#FEF3C7;color:#92400E">%S1</th>
+        <th style="background:#DBEAFE;color:#1E3A8A">S2<br><span style="font-size:8px;font-weight:400">FSO</span></th>
+        <th style="background:#FFEDD5;color:#9A3412">S3<br><span style="font-size:8px;font-weight:400">Defend</span></th>
+        <th style="background:#D1FAE5;color:#064E3B">S4<br><span style="font-size:8px;font-weight:400">BBTEC Mgr</span></th>
+        <th style="background:#EDE9FE;color:#4C1D95">S5<br><span style="font-size:8px;font-weight:400">FSO Mgr</span></th>
+        <th style="background:#FEE2E2;color:#991B1B">S6<br><span style="font-size:8px;font-weight:400">ปรับ</span></th>
+        <th style="background:#D1FAE5;color:#064E3B">S6<br><span style="font-size:8px;font-weight:400">ไม่ปรับ</span></th>
+        <th style="text-align:right">Penalty<br><span style="font-size:8px;font-weight:400">(M)</span></th>
+        <th style="text-align:right">Final<br><span style="font-size:8px;font-weight:400">(M)</span></th>
+        <th style="text-align:right">ลดได้<br><span style="font-size:8px;font-weight:400">(M)</span></th>
       </tr>
     </thead><tbody>`;
 
