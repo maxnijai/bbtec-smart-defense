@@ -487,9 +487,8 @@
           <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-left:auto">
             <button class="btn-action" onclick="exportExcel()" title="Export Excel">📥 Excel</button>
             <button class="btn-action" title="รีเฟรชข้อมูล" onclick="refreshTickets(this)" style="font-size:13px">🔄</button>
-            <button class="btn-action" title="Sync ข้อมูลจาก Google Sheets → DB" onclick="syncFromSheets(this)" style="font-size:12px;color:var(--green);border-color:var(--green)">⬇️ Sync</button>
-            <button class="btn-action" title="Sync Productivity (ทุก 3 วัน)" onclick="syncProductivity(this)" style="font-size:12px;color:var(--purple);border-color:var(--purple)">📊 Sync Productivity</button>
-            <button class="btn-action" title="Sync จาก Google Sheets" onclick="syncFromSheets(this)" style="font-size:12px;color:var(--green);border-color:var(--green)">⬇️ Sync</button>
+            <button class="btn-action admin-only" id="btn-sync-sheets" title="Sync ข้อมูลจาก Google Sheets → DB" onclick="syncFromSheets(this)" style="font-size:12px;color:var(--green);border-color:var(--green);display:none">⬇️ Sync</button>
+            <button class="btn-action admin-only" id="btn-sync-prod" title="Sync Productivity (ทุก 3 วัน)" onclick="syncProductivity(this)" style="font-size:12px;color:var(--purple);border-color:var(--purple);display:none">📊 Sync Productivity</button>
             <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID / Subject..." oninput="filterTickets()"/>
             <select class="filter-select" id="filter-province" onchange="filterTickets()">
               <option value="">ทุก Province</option>
@@ -735,6 +734,16 @@ function initApp(user){
   $('sb-name').textContent = user.user;
   $('sb-role').textContent = user.role;
   $('sb-region').textContent = user.region || 'NOR';
+
+  // ── ซ่อน/แสดง Sync buttons ตาม Role ──
+  // เฉพาะ BBTEC_REGIONAL เท่านั้นที่เห็นปุ่ม Sync
+  const role_upper = String(user.role||'').toUpperCase().replace(/ /g,'_');
+  const canSync = role_upper === 'BBTEC_REGIONAL' || role_upper.includes('BBTEC_REGIONAL');
+  const syncBtns = document.querySelectorAll('.admin-only');
+  syncBtns.forEach(btn => {
+    btn.style.display = canSync ? 'inline-flex' : 'none';
+  });
+
   // Reset all pages, show dashboard
   document.querySelectorAll('.page').forEach(p => {
     p.classList.remove('active','flex-page');
