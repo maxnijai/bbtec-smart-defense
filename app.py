@@ -1028,7 +1028,55 @@ def drilldown(ticketid):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/sync/productivity", methods=["POST"])
+@app.route("/api/change-password", methods=["POST"])
+@login_required
+def change_password():
+    data = request.json or {}
+    old_pwd = str(data.get("old_password","")).strip()
+    new_pwd = str(data.get("new_password","")).strip()
+
+    if not old_pwd or not new_pwd:
+        return jsonify({"error": "กรุณากรอกข้อมูลให้ครบ"}), 400
+    if len(new_pwd) < 8:
+        return jsonify({"error": "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร"}), 400
+    if old_pwd == new_pwd:
+        return jsonify({"error": "รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม"}), 400
+
+    try:
+        username = session.get("user")
+        u = db_execute("SELECT pass_hash FROM users WHERE username=%s", (username,), fetch="one")
+        if not u:
+            return jsonify({"error": "ไม่พบผู้ใช้"}), 404
+
+        stored = str(u["pass_hash"]).strip()
+        # Accept plain text or hashed
+        if stored != old_pwd and stored != hash_password(old_pwd):
+            return jsonify({"error": "รหัสผ่านเดิมไม่ถูกต้อง"}), 401
+
+        # Save new password (store as plain for now, matching existing system)
+        db_execute("UPDATE users SET pass_hash=%s WHERE username=%s", (new_pwd, username))
+
+        # Also update in Sheets async (best effort)
+        def _update_sheet():
+            try:
+                sheet = get_sheet("USER_ACCOUNT")
+                all_vals = sheets_retry(sheet.get_all_values)
+                if not all_vals: return
+                headers = [str(h).strip() for h in all_vals[0]]
+                if 'User' not in headers or 'Pass' not in headers: return
+                user_col = headers.index('User') + 1
+                pass_col = headers.index('Pass') + 1
+                for i, row in enumerate(all_vals[1:], start=2):
+                    if len(row) >= user_col and str(row[user_col-1]).strip() == username:
+                        sheets_retry(sheet.update_cell, i, pass_col, new_pwd)
+                        break
+            except Exception as e:
+                print(f"⚠️ Sheet password update failed: {e}")
+        threading.Thread(target=_update_sheet, daemon=True).start()
+
+        return jsonify({"success": True, "message": "เปลี่ยนรหัสผ่านสำเร็จ"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 @login_required
 def sync_productivity():
     """Sync Sheet1 → productivity table. Run every 3 days."""
