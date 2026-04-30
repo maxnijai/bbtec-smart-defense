@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>BBTEC Smart Defense</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @media(max-width:768px){
+    .sidebar{display:none!important}
+    .main{width:100%!important}
+    .kpi-grid,.charts-grid{grid-template-columns:1fr 1fr!important}
+    .topbar{padding:10px 14px!important}
+    td,th{padding:6px 8px!important;font-size:11px!important}
+    .modal{width:96vw!important;margin:10px!important;padding:16px!important}
+    .detail-grid{grid-template-columns:1fr!important}
+    .form-row{grid-template-columns:1fr!important}
+    #page-dashboard{overflow-y:auto!important;height:auto!important}
+    .mobile-nav{display:flex!important}
+  }
+  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;
+    background:var(--bg2);border-top:1px solid var(--border);z-index:50;padding:6px 0}
+  .mobile-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;
+    font-size:10px;color:var(--muted);cursor:pointer;padding:4px 0}
+  .mobile-nav-item.active{color:var(--accent)}
+  .mobile-nav-icon{font-size:18px;margin-bottom:2px}
+  .cb-ticket{width:14px;height:14px;cursor:pointer;accent-color:var(--accent)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f8f9fa;
+    --bg2:#f0f2f4;
+    --bg3:#e4e7eb;
+    --card:#ffffff;
+    --border:#d8dde3;
+    --text:#1a2332;
+    --muted:#64748b;
+    --accent:#2563eb;
+    --accent2:#0891b2;
+    --green:#16a34a;
+    --red:#dc2626;
+    --amber:#d97706;
+    --purple:#7c3aed;
+    --font:'IBM Plex Sans Thai',sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6}
+
+  /* ── Login ── */
+  #login-screen{
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+    background:radial-gradient(ellipse at 30% 40%,#dce8f8 0%,#f8f9fa 60%);
+  }
+  .login-box{
+    width:360px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:40px 36px;
+  }
+  .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+  .login-shield{
+    width:44px;height:44px;border-radius:10px;
+    background:linear-gradient(135deg,#1d4ed8,#0891b2);
+    display:flex;align-items:center;justify-content:center;
+    font-size:22px;
+  }
+  .login-title{font-size:18px;font-weight:600;color:var(--text)}
+  .login-sub{font-size:11px;color:var(--muted);margin-top:1px}
+  .form-label{font-size:11px;color:var(--muted);margin-bottom:5px;display:block;letter-spacing:.04em}
+  .form-input{
+    width:100%;background:var(--bg3);border:1px solid var(--border);
+    border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font);
+    font-size:14px;outline:none;transition:border .2s;margin-bottom:14px;
+  }
+  .form-input:focus{border-color:var(--accent)}
+  .btn-primary{
+    width:100%;background:var(--accent);color:#fff;border:none;
+    border-radius:8px;padding:11px;font-family:var(--font);font-size:14px;
+    font-weight:500;cursor:pointer;transition:opacity .15s;
+  }
+  .btn-primary:hover{opacity:.88}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .login-err{color:var(--red);font-size:12px;margin-top:10px;text-align:center;min-height:18px}
+  .login-sys{display:flex;flex-direction:column;gap:6px;margin-bottom:24px}
+  .sys-btn{
+    display:flex;align-items:center;gap:10px;
+    background:var(--bg3);border:1px solid var(--border);
+    border-radius:8px;padding:10px 14px;cursor:pointer;transition:border .15s;
+  }
+  .sys-btn.selected{border-color:var(--accent);background:#dbeafe}
+  .sys-btn-icon{font-size:16px}
+  .sys-btn-label{font-size:13px;font-weight:500}
+  .sys-btn-sub{font-size:11px;color:var(--muted)}
+
+  /* ── App Shell ── */
+  #app{display:none;height:100vh;display:none;flex-direction:row}
+  #app.visible{display:flex}
+  .sidebar{
+    width:220px;min-width:220px;background:var(--bg2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:16px 0;overflow-y:auto;
+  }
+  .sidebar-logo{
+    display:flex;align-items:center;gap:10px;
+    padding:0 16px 16px;border-bottom:1px solid var(--border);margin-bottom:12px;
+  }
+  .sidebar-shield{
+    width:32px;height:32px;border-radius:8px;
+    background:linear-gradient(135deg,#1d4ed8,#0891b2);
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+  }
+  .sidebar-title{font-size:13px;font-weight:600}
+  .sidebar-sub{font-size:10px;color:var(--muted)}
+  .nav-section{padding:0 10px;margin-bottom:4px}
+  .nav-label{font-size:10px;color:var(--muted);letter-spacing:.06em;padding:8px 8px 4px;text-transform:uppercase}
+  .nav-item{
+    display:flex;align-items:center;gap:9px;
+    padding:8px 10px;border-radius:7px;cursor:pointer;
+    font-size:13px;color:var(--muted);transition:background .15s,color .15s;
+    margin-bottom:2px;
+  }
+  .nav-item:hover{background:var(--bg3);color:var(--text)}
+  .nav-item.active{background:#dbeafe;color:#1d4ed8;font-weight:500}
+  .nav-icon{font-size:14px;width:18px;text-align:center}
+  .sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
+  .user-info{display:flex;align-items:center;gap:10px}
+  .user-avatar{
+    width:32px;height:32px;border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;
+  }
+  .user-name{font-size:12px;font-weight:500}
+  .user-role{font-size:10px;color:var(--muted)}
+  .btn-logout{
+    margin-top:8px;width:100%;background:transparent;
+    border:1px solid var(--border);color:var(--muted);
+    border-radius:6px;padding:6px;font-size:12px;cursor:pointer;
+    transition:border .15s,color .15s;
+  }
+  .btn-logout:hover{border-color:var(--red);color:var(--red)}
+
+  /* ── Main Content ── */
+  .main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+  .topbar{
+    padding:14px 24px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:12px;background:var(--bg2);
+    position:sticky;top:0;z-index:10;
+  }
+  .topbar-title{font-size:15px;font-weight:600}
+  .topbar-sub{font-size:12px;color:var(--muted);margin-left:auto}
+  .page{padding:20px 24px;display:none}
+  .page{display:none}
+  .page.active{display:block}
+  .page.active.flex-page{display:flex!important}
+
+  /* ── KPI Cards ── */
+  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+  .kpi-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:10px;padding:14px 16px;
+  }
+  .kpi-step{font-size:10px;color:var(--muted);letter-spacing:.04em;margin-bottom:2px}
+  .kpi-label{font-size:11px;color:var(--muted);margin-bottom:6px}
+  .kpi-val{font-size:24px;font-weight:600}
+  .kpi-bar{height:3px;border-radius:2px;background:var(--border);margin-top:8px}
+  .kpi-bar-fill{height:100%;border-radius:2px}
+  .kpi-sub{font-size:10px;color:var(--muted);margin-top:4px}
+  .c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-red{color:var(--red)}
+  .c-green{color:var(--green)}.c-teal{color:var(--accent2)}.c-purple{color:var(--purple)}
+
+  /* ── Table ── */
+  .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .table-header{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+  }
+  .table-title{font-size:13px;font-weight:500}
+  .filter-row{display:flex;gap:8px;margin-left:auto}
+  .filter-select{
+    background:var(--bg3);border:1px solid var(--border);
+    color:var(--text);border-radius:6px;padding:5px 10px;font-family:var(--font);font-size:12px;
+  }
+  .search-input{
+    background:var(--bg3);border:1px solid var(--border);
+    color:var(--text);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;
+    width:200px;outline:none;
+  }
+  .search-input:focus{border-color:var(--accent)}
+  .sortable{cursor:pointer;user-select:none}
+  .sortable:hover{background:#e4e7eb;color:var(--text)}
+  .sort-icon{font-size:10px;opacity:.6}
+  th.sort-asc .sort-icon::after{content:'↑';opacity:1}
+  th.sort-desc .sort-icon::after{content:'↓';opacity:1}
+  /* Pivot table styles */
+  .pivot-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+  .pivot-table th{padding:7px 8px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;top:0;z-index:2}
+  .pivot-table tr.data-row{cursor:pointer;transition:background .12s}
+  .pivot-table tr.data-row:hover td{background:#eff6ff}
+  .pivot-table tr.data-row:hover td:nth-child(2){color:var(--accent)}
+  .pivot-table th:first-child{text-align:left;width:52px}
+  .pivot-table th:nth-child(2){text-align:left;width:110px}
+  .pivot-table th:nth-child(3){width:55px}
+  .pivot-table th:nth-child(4){width:52px}
+  .pivot-table th:nth-child(5){width:52px}
+  .pivot-table th:nth-child(6),.pivot-table th:nth-child(7),.pivot-table th:nth-child(8),.pivot-table th:nth-child(9),.pivot-table th:nth-child(10),.pivot-table th:nth-child(11){width:50px}
+  .pivot-table th:nth-child(12),.pivot-table th:nth-child(13),.pivot-table th:nth-child(14){width:70px}
+  .pivot-table td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:right;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pivot-table td:first-child{font-size:10px;color:var(--muted);text-align:left;padding-left:12px}
+  .pivot-table td:nth-child(2){text-align:left;font-weight:500;color:var(--text)}
+  .pivot-table tr.region-row td{background:var(--bg3);font-weight:700;color:var(--accent2);font-size:11px}
+  .pivot-table tr.region-row td:first-child{padding-left:8px}
+  .pivot-table tr.total-row td{background:#dbeafe;font-weight:700;color:var(--text);border-top:2px solid var(--accent)}
+  .pivot-table .num-green{color:#10b981;font-weight:600}
+  .pivot-table .num-red{color:#ef4444;font-weight:600}
+  .pivot-table .num-amber{color:#f59e0b;font-weight:600}
+  .pivot-table .num-blue{color:#93c5fd;font-weight:600}
+  .pivot-table .pct{font-size:10px;color:var(--muted)}
+  /* %S1 heat badge */
+  .pct-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;min-width:42px;text-align:center}
+  .pct-0{background:#fee2e2;color:#991b1b}
+  .pct-low{background:#fef3c7;color:#92400e}
+  .pct-mid{background:#dbeafe;color:#1e40af}
+  .pct-high{background:#dcfce7;color:#14532d}
+  .pct-full{background:#ede9fe;color:#4c1d95}
+  table{width:100%;border-collapse:collapse}
+  th{
+    padding:10px 14px;text-align:left;font-size:11px;font-weight:500;
+    color:var(--muted);letter-spacing:.04em;border-bottom:1px solid var(--border);
+    background:var(--bg3);
+  }
+  td{
+    padding:10px 14px;font-size:12px;border-bottom:1px solid var(--border);
+    vertical-align:middle;
+  }
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#f1f5f9}
+  .tid{font-family:var(--mono);font-size:11px;color:var(--accent2)}
+  .badge{
+    display:inline-block;padding:2px 9px;border-radius:10px;
+    font-size:10px;font-weight:500;
+  }
+  .badge-1{background:#dcfce7;color:#15803d}
+  .badge-2{background:#dbeafe;color:#1d4ed8}
+  .badge-3{background:#fef3c7;color:#92400e}
+  .badge-4{background:#dcfce7;color:#15803d}
+  .badge-5{background:#ede9fe;color:#5b21b6}
+  .badge-pending{background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1}
+  .badge-2{background:#dbeafe;color:#1d4ed8}
+  .badge-fso-penalty{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+  .badge-defending{background:#fef9c3;color:#854d0e;border:1px solid #fde047}
+  .badge-lock{background:#f1f5f9;color:#475569}
+  .badge-penalty{background:#fee2e2;color:#991b1b}
+  .badge-no-penalty{background:#dcfce7;color:#15803d}
+  .badge-defend{background:#fef3c7;color:#92400e}
+  .btn-action{
+    background:transparent;border:1px solid var(--border);
+    color:var(--text);border-radius:6px;padding:4px 12px;
+    font-size:11px;cursor:pointer;font-family:var(--font);
+    transition:border .15s,background .15s;
+  }
+  .btn-action:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-sm-green{background:#064e3b;border-color:#065f46;color:#6ee7b7}
+  .btn-sm-red{background:#450a0a;border-color:#7f1d1d;color:#fca5a5}
+  .empty-row td{text-align:center;color:var(--muted);padding:32px}
+
+  /* ── Step Progress ── */
+  .step-progress{
+    display:flex;align-items:center;
+    background:var(--bg3);border:1px solid var(--border);
+    border-radius:10px;padding:12px 20px;margin-bottom:20px;gap:0;
+  }
+  .sp-item{flex:1;text-align:center;position:relative}
+  .sp-circle{
+    width:28px;height:28px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:600;margin:0 auto 4px;
+    border:2px solid var(--border);background:var(--bg3);color:var(--muted);
+    transition:all .3s;
+  }
+  .sp-circle.done{background:#065f46;border-color:#10b981;color:#6ee7b7}
+  .sp-circle.active{background:#dbeafe;border-color:#2563eb;color:#1d4ed8}
+  .sp-label{font-size:10px;color:var(--muted)}
+  .sp-line{flex:none;height:2px;width:32px;background:var(--border);margin-bottom:14px}
+  .sp-line.done{background:#10b981}
+
+  /* ── Detail Modal ── */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  .modal-overlay.open{opacity:1;pointer-events:all}
+  .modal{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:14px;width:620px;max-height:88vh;overflow-y:auto;
+    padding:24px;transform:translateY(12px);transition:transform .2s;
+  }
+  .modal-overlay.open .modal{transform:translateY(0)}
+  .modal-title{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+  .modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px;border-radius:4px}
+  .modal-close:hover{color:var(--text)}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .detail-item{background:var(--bg3);border-radius:8px;padding:10px 12px}
+  .detail-label{font-size:10px;color:var(--muted);margin-bottom:3px}
+  .detail-val{font-size:13px;font-weight:500}
+  .form-section{margin-bottom:16px}
+  .form-section-title{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;letter-spacing:.04em}
+  .form-textarea{
+    width:100%;background:var(--bg3);border:1px solid var(--border);
+    color:var(--text);border-radius:8px;padding:10px 12px;font-family:var(--font);
+    font-size:13px;resize:vertical;min-height:72px;outline:none;
+  }
+  .form-textarea:focus{border-color:var(--accent)}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .decision-row{display:flex;gap:10px;margin-bottom:12px}
+  .dec-btn{
+    flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);
+    background:transparent;color:var(--muted);font-family:var(--font);
+    font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;
+  }
+  .dec-btn:hover{border-color:var(--accent)}
+  .dec-btn.selected-penalty{border-color:var(--red);background:#fee2e2;color:#991b1b}
+  .dec-btn.selected-no-penalty{border-color:var(--green);background:#dcfce7;color:#15803d}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .btn-cancel{
+    background:transparent;border:1px solid var(--border);
+    color:var(--muted);border-radius:8px;padding:9px 20px;
+    font-family:var(--font);font-size:13px;cursor:pointer;
+  }
+  .btn-submit{
+    background:var(--accent);color:#fff;border:none;
+    border-radius:8px;padding:9px 20px;font-family:var(--font);
+    font-size:13px;font-weight:500;cursor:pointer;
+  }
+  .btn-submit:hover{opacity:.88}
+  .btn-submit:disabled{opacity:.4;cursor:not-allowed}
+  .defend-counter{
+    background:var(--bg3);border-radius:8px;padding:10px 14px;
+    display:flex;align-items:center;gap:12px;margin-bottom:12px;
+  }
+  .defend-dots{display:flex;gap:6px}
+  .defend-dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--border)}
+  .defend-dot.used{background:var(--amber);border-color:var(--amber)}
+  .toast{
+    position:fixed;bottom:24px;right:24px;z-index:200;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:10px;padding:12px 18px;
+    font-size:13px;display:flex;align-items:center;gap:10px;
+    transform:translateY(20px);opacity:0;
+    transition:transform .25s,opacity .25s;pointer-events:none;
+  }
+  .toast.show{transform:translateY(0);opacity:1}
+  .toast.success{border-color:var(--green)}
+  .toast.error{border-color:var(--red)}
+
+  /* ── Charts page ── */
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .chart-title{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:12px}
+
+  /* loading */
+  .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--muted)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-right:10px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo" style="flex-direction:column;align-items:center;text-align:center;margin-bottom:20px">
+      <img src="/logo.png" alt="BBTEC Smart Defense" style="width:200px;height:auto;margin-bottom:10px;filter:drop-shadow(0 0 12px rgba(59,130,246,0.35))"/>
+      <div class="login-sub" style="font-size:12px">ระบบบริหารจัดการค่าปรับ NOR1 / NOR2</div>
+    </div>
+
+    <div class="login-sys" id="sys-selector">
+      <div class="sys-btn selected" data-sys="defense">
+        <span class="sys-btn-icon">🛡</span>
+        <div>
+          <div class="sys-btn-label">BBTEC Smart Defense</div>
+          <div class="sys-btn-sub">จัดการและป้องกันค่าปรับ</div>
+        </div>
+      </div>
+    </div>
+
+    <label class="form-label">Username</label>
+    <input class="form-input" id="inp-user" type="text" placeholder="กรอก Username" autocomplete="username"/>
+    <label class="form-label">Password</label>
+    <input class="form-input" id="inp-pass" type="password" placeholder="กรอก Password" autocomplete="current-password"/>
+    <button class="btn-primary" id="btn-login" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- APP SHELL -->
+<div id="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo" style="flex-direction:column;align-items:center;padding:8px 12px 12px">
+      <img src="/logo.png" alt="BBTEC Smart Defense" style="width:130px;height:auto;margin-bottom:4px;filter:drop-shadow(0 0 6px rgba(59,130,246,0.3))"/>
+      <div class="sidebar-sub" id="sb-region" style="text-align:center;font-size:10px">NOR Region</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">หลัก</div>
+      <div class="nav-item" onclick="showPage('sysflow')" data-page="sysflow">
+        <span class="nav-icon">🗺</span> System Flow
+      </div>
+      <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('tickets')" data-page="tickets">
+        <span class="nav-icon">🎫</span> Ticket ทั้งหมด
+      </div>
+      <div class="nav-item" onclick="showPage('charts')" data-page="charts">
+        <span class="nav-icon">📈</span> รายงาน / กราฟ
+      </div>
+
+    </div>
+
+    <div class="nav-section" id="nav-workflow">
+      <div class="nav-label">งานของฉัน</div>
+      <div class="nav-item" onclick="showPage('my-tickets')" data-page="my-tickets">
+        <span class="nav-icon">📋</span> Ticket ที่รอฉัน
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="sb-avatar">?</div>
+        <div>
+          <div class="user-name" id="sb-name">—</div>
+          <div class="user-role" id="sb-role">—</div>
+        </div>
+      </div>
+      <button onclick="openChangePassword()" style="width:100%;margin-bottom:6px;padding:7px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 เปลี่ยนรหัสผ่าน</button>
+      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-sub" id="topbar-time">—</div>
+    </div>
+
+    <!-- Page: Dashboard -->
+    <div class="page active flex-page" id="page-dashboard" style="padding:10px 18px;flex-direction:column;gap:8px;height:calc(100vh - 54px);overflow:hidden">
+      <div id="dashboard-loading" class="loading"><div class="spinner"></div> กำลังโหลดข้อมูล...</div>
+      <div id="dashboard-content" style="display:none;flex-direction:column;gap:8px;flex:1;overflow:hidden;min-height:0">
+        <!-- KPI Banner (compact) -->
+        <div id="kpi-grid"></div>
+        <!-- Bottom row: Pivot + Chart — fills remaining space -->
+        <div style="display:grid;grid-template-columns:1fr 260px;gap:10px;flex:1;min-height:0;overflow:hidden">
+          <div class="chart-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0">
+            <div style="padding:7px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <span style="font-size:11px;font-weight:600">📊 Overall Summary — Workflow by Province</span>
+              <span style="font-size:10px;color:var(--muted);margin-left:auto" id="pivot-province-label">NOR1 / NOR2</span>
+            </div>
+            <div id="pivot-table-wrap" style="overflow:auto;flex:1"></div>
+          </div>
+          <div class="chart-card" style="display:flex;flex-direction:column;min-height:0">
+            <div class="chart-title" style="flex-shrink:0">ยอดค่าปรับ (บาท)</div>
+            <div style="flex:1;position:relative;min-height:0"><canvas id="chart-baht" style="position:absolute;inset:0;width:100%!important;height:100%!important"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Tickets -->
+    <div class="page" id="page-tickets">
+      <!-- Mini KPI for tickets page (province-filtered) -->
+      <div id="tickets-kpi" style="margin-bottom:14px"></div>
+      <div class="table-wrap">
+        <div class="table-header" style="flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="cb-all-wrap"></span>
+            <div class="table-title">รายการ Ticket ทั้งหมด</div>
+            <button class="btn-action btn-sm-green" id="btn-bulk-approve" style="display:none" onclick="doBulkApprove()">✓ Approve ที่เลือก (<span id="selected-count">0</span>)</button>
+          </div>
+          <div class="filter-row" style="flex-wrap:wrap;gap:6px;margin-left:auto">
+            <button class="btn-action" onclick="exportExcel()" title="Export Excel">📥 Excel</button>
+            <button class="btn-action" title="รีเฟรชข้อมูล" onclick="refreshTickets(this)" style="font-size:13px">🔄</button>
+            <button class="btn-action admin-only" id="btn-sync-sheets" title="Sync ข้อมูลจาก Google Sheets → DB" onclick="syncFromSheets(this)" style="font-size:12px;color:var(--green);border-color:var(--green);display:none">⬇️ Sync</button>
+            <button class="btn-action admin-only" id="btn-sync-prod" title="Sync Productivity (ทุก 3 วัน)" onclick="syncProductivity(this)" style="font-size:12px;color:var(--purple);border-color:var(--purple);display:none">📊 Sync Productivity</button>
+            <input class="search-input" id="search-tickets" placeholder="ค้นหา TICKETID / Subject..." oninput="filterTickets()"/>
+            <select class="filter-select" id="filter-province" onchange="filterTickets()">
+              <option value="">ทุก Province</option>
+            </select>
+            <select class="filter-select" id="filter-step" onchange="filterTickets()">
+              <option value="">ทุก Step</option>
+              <option value="0">รอ Step 1</option>
+              <option value="1">Step 1</option>
+              <option value="2">Step 2</option>
+              <option value="3">⚔️ Defend</option>
+              <option value="4">Final</option>
+              <option value="5">✓ Approved</option>
+            </select>
+            <select class="filter-select" id="filter-result" onchange="filterTickets()">
+              <option value="">ทุก Final</option>
+              <option value="ปรับ">ปรับ</option>
+              <option value="ไม่ปรับ">ไม่ปรับ</option>
+            </select>
+            <button class="btn-action" id="btn-clear-filter" onclick="clearFilters()" style="display:none;color:var(--red);border-color:var(--red)" title="ปลด filter ทั้งหมด">✕ ปลด filter</button>
+          </div>
+        </div>
+        <div id="tickets-loading" class="loading"><div class="spinner"></div> กำลังโหลด...</div>
+        <table id="ticket-table" style="display:none">
+          <thead>
+            <tr>
+              <th style="width:32px" id="th-cb-head"></th>
+              <th class="sortable" data-col="TICKETID" onclick="sortTable('TICKETID')">TICKET ID <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="SUBJECT" onclick="sortTable('SUBJECT')">Subject <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="TrackB_Region" onclick="sortTable('TrackB_Region')">Province <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="PENALTYBAHT_TRACKB" onclick="sortTable('PENALTYBAHT_TRACKB')">ค่าปรับ (บาท) <span class="sort-icon">↓</span></th>
+              <th class="sortable" data-col="FSO" onclick="sortTable('FSO')">FSO ตัดสิน <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="STEP" onclick="sortTable('STEP')">Step <span class="sort-icon">⇅</span></th>
+              <th class="sortable" data-col="FINAL_RESULT" onclick="sortTable('FINAL_RESULT')">Final <span class="sort-icon">⇅</span></th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="ticket-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Page: My Tickets -->
+    <div class="page" id="page-my-tickets">
+      <div id="my-step-indicator" style="margin-bottom:12px"></div>
+      <div class="table-wrap">
+        <div class="table-header" style="flex-wrap:wrap;gap:6px">
+          <div class="table-title" id="my-tickets-title">Ticket ที่รอดำเนินการ</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center">
+            <input class="search-input" id="my-search" placeholder="ค้นหา TICKETID / Subject..." oninput="renderMyTickets()" style="width:200px"/>
+            <select class="filter-select" id="my-filter-step" onchange="renderMyTickets()">
+              <option value="">ทุก Step</option>
+              <option value="0">รอ Step 1</option>
+              <option value="1">Step 1</option>
+              <option value="2">FSO: ปรับ</option>
+              <option value="3">Defend</option>
+              <option value="4">Final</option>
+            </select>
+            <select class="filter-select" id="my-filter-fso" onchange="renderMyTickets()">
+              <option value="">ทุก FSO</option>
+              <option value="ปรับ">ปรับ</option>
+              <option value="ไม่ปรับ">ไม่ปรับ</option>
+            </select>
+            <button class="btn-action" onclick="clearMyFilters()" id="btn-clear-my" style="display:none;color:var(--red);border-color:var(--red)">✕ ปลด filter</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>TICKET ID</th>
+              <th>Subject</th>
+              <th>ค่าปรับ (บาท)</th>
+              <th>Defend ครั้งที่</th>
+              <th>สถานะ</th>
+              <th>FSO ตัดสิน</th>
+              <th>Final</th>
+              <th>ดำเนินการ</th>
+            </tr>
+          </thead>
+          <tbody id="my-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Page: System Flow -->
+    <div class="page" id="page-sysflow" style="padding:16px 20px;overflow-y:auto">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <span style="font-size:16px">🗺</span>
+          <div>
+            <div style="font-size:14px;font-weight:600">BBTEC Smart Defense — System Flow Overview</div>
+            <div style="font-size:11px;color:var(--muted)">ระบบบริหารจัดการและป้องกันค่าปรับอย่างครบวงจร</div>
+          </div>
+          <a href="/system-flow.png" download="SmartDefense_SystemFlow.png" target="_blank" style="margin-left:auto;font-size:11px;color:var(--accent2);text-decoration:none;border:1px solid var(--border);padding:5px 12px;border-radius:6px">
+            🔍 เปิดภาพใหญ่
+          </a>
+        </div>
+        <div style="padding:16px;text-align:center;background:#0a0f1a">
+          <img src="/system-flow.png" alt="BBTEC Smart Defense System Flow" style="max-width:100%;height:auto;border-radius:8px;cursor:zoom-in" onclick="this.requestFullscreen&&this.requestFullscreen()" title="คลิกเพื่อดูขนาดเต็ม"/>
+        </div>
+        <div style="padding:12px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;border-top:1px solid var(--border)">
+          <div style="background:var(--bg3);border-left:3px solid #f59e0b;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 1</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Engineer Zone / Site Sup</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #3b82f6;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 2</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">FSO Zone Review</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #ef4444;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 3</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Defend Process (2 ครั้ง)</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #10b981;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 4</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Final Result</div>
+          </div>
+          <div style="background:var(--bg3);border-left:3px solid #a78bfa;border-radius:6px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--muted)">STEP 5</div>
+            <div style="font-size:11px;font-weight:500;color:var(--text)">Manager Approve NOR1/2</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Charts — Executive Summary -->
+    <div class="page" id="page-charts">
+      <div id="exec-summary"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile Bottom Nav -->
+<div class="mobile-nav" id="mobile-nav">
+  <div class="mobile-nav-item active" onclick="showPage('dashboard')" data-mpage="dashboard">
+    <div class="mobile-nav-icon">📊</div><div>Dashboard</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('tickets')" data-mpage="tickets">
+    <div class="mobile-nav-icon">🎫</div><div>Tickets</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('my-tickets')" data-mpage="my-tickets">
+    <div class="mobile-nav-icon">📋</div><div>งานฉัน</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('charts')" data-mpage="charts">
+    <div class="mobile-nav-icon">📈</div><div>รายงาน</div>
+  </div>
+  <div class="mobile-nav-item" onclick="showPage('sysflow')" data-mpage="sysflow">
+    <div class="mobile-nav-icon">🗺</div><div>Flow</div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <div class="modal-title">
+      <span id="modal-tid">Ticket Detail</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span></div>
+
+<script>
+const API = '';
+let allTickets = [];
+let allTicketsRaw = [];  // unfiltered, for dashboard pivot
+let charts = {};
+let currentUser = null;
+
+// ── Utils ──
+const $ = id => document.getElementById(id);
+function fmt(n){ return n != null ? Number(n).toLocaleString('th-TH') : '—' }
+function fmtBaht(n){ return n ? Number(n).toLocaleString('th-TH',{maximumFractionDigits:0}) + ' ฿' : '—' }
+
+function showToast(msg, type='success'){
+  const t = $('toast');
+  $('toast-icon').textContent = type === 'success' ? '✓' : '✗';
+  $('toast-msg').textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(()=> t.className = 'toast', 3000);
+}
+
+function updateClock(){
+  const now = new Date();
+  $('topbar-time').textContent = now.toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Login ──
+$('inp-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const btn = $('btn-login');
+  btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
+  $('login-err').textContent = '';
+  let delay = 2000;
+  for(let attempt=0; attempt<4; attempt++){
+    try {
+      const res = await fetch(`${API}/api/login`,{
+        method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: $('inp-user').value.trim(), password: $('inp-pass').value })
+      });
+      const data = await res.json();
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(attempt < 3){
+          $('login-err').textContent = `⏳ Server ยุ่งอยู่ รอ ${Math.round(delay/1000)}s แล้วลองใหม่...`;
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 16000);
+          continue;
+        }
+        $('login-err').textContent = 'Server ยุ่งมาก กรุณารอสักครู่แล้วลองใหม่';
+        break;
+      }
+      if(data.success){
+        currentUser = data; initApp(data);
+      } else {
+        $('login-err').textContent = data.error || 'เข้าสู่ระบบไม่สำเร็จ';
+      }
+      break;
+    } catch(e){
+      $('login-err').textContent = 'ไม่สามารถเชื่อมต่อ Server';
+      break;
+    }
+  }
+  btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+}
+
+async function doLogout(){
+  await fetch(`${API}/api/logout`,{method:'POST',credentials:'include'});
+  $('login-screen').style.display='flex';
+  $('app').classList.remove('visible');
+  currentUser = null; allTickets = [];
+}
+
+function initApp(user){
+  $('login-screen').style.display = 'none';
+  $('app').classList.add('visible');
+  const initials = (user.user||'??').substring(0,2).toUpperCase();
+  $('sb-avatar').textContent = initials;
+  $('sb-name').textContent = user.user;
+  $('sb-role').textContent = user.role;
+  $('sb-region').textContent = user.region || 'NOR';
+
+  // ── ซ่อน/แสดง Sync buttons ตาม Role ──
+  // เฉพาะ BBTEC_REGIONAL เท่านั้นที่เห็นปุ่ม Sync
+  const role_upper = String(user.role||'').toUpperCase().replace(/ /g,'_');
+  const canSync = role_upper === 'BBTEC_REGIONAL' || role_upper.includes('BBTEC_REGIONAL');
+  const syncBtns = document.querySelectorAll('.admin-only');
+  syncBtns.forEach(btn => {
+    btn.style.display = canSync ? 'inline-flex' : 'none';
+  });
+
+  // Reset all pages, show dashboard
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active','flex-page');
+    p.style.display = '';
+  });
+  const dash = $('page-dashboard');
+  dash.classList.add('active','flex-page');
+  loadDashboard();
+  loadTickets();
+  // Init audit sheet quietly in background after login stabilizes
+  setTimeout(()=>fetch(`${API}/api/audit/init`,{credentials:'include'}).catch(()=>{}), 3000);
+}
+
+// ── Navigation ──
+function showPage(page){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pg = $(`page-${page}`);
+  pg.classList.add('active');
+  // dashboard needs flex, others block
+  if(page==='dashboard') pg.classList.add('flex-page');
+  else pg.classList.remove('flex-page');
+  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+  const titles = {
+    dashboard:'Dashboard',tickets:'Ticket ทั้งหมด',
+    'my-tickets':'Ticket ที่รอดำเนินการ',charts:'รายงาน / กราฟ',sysflow:'System Flow Overview'
+  };
+  $('topbar-title').textContent = titles[page] || page;
+  if(page==='charts') renderCharts();
+  if(page==='my-tickets') renderMyTickets();
+  updateMobileNav(page);
+}
+
+// ── Dashboard ──
+// ── Fetch with auto-retry on 429 ──
+async function fetchWithRetry(url, opts={}, maxRetries=4){
+  let delay = 2000;
+  for(let i=0; i<maxRetries; i++){
+    try {
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      // If 429 quota error — wait and retry
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(i < maxRetries-1){
+          showToast(`⏳ API เกิน quota รอ ${Math.round(delay/1000)}s แล้ว retry...`, 'info');
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 30000);
+          continue;
+        }
+      }
+      return data;
+    } catch(e){
+      if(i < maxRetries-1){
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 30000);
+      }
+    }
+  }
+  return { error: 'ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่' };
+}
+
+async function loadDashboard(){
+  const el = $('dashboard-loading');
+  if(el){ el.innerHTML = '<div class="spinner"></div> กำลังโหลดข้อมูล...'; el.style.display='flex'; }
+  const d = await fetchWithRetry(`${API}/api/dashboard/summary`, {credentials:'include'});
+  if(d.error){
+    if(el) el.innerHTML = `
+      <div style="text-align:center;padding:32px">
+        <div style="font-size:13px;color:var(--red);margin-bottom:12px">⚠️ โหลดข้อมูลไม่สำเร็จ</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:16px">กรุณารอสักครู่แล้วลองใหม่</div>
+        <button onclick="loadDashboard()" style="padding:6px 18px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:12px">🔄 ลองใหม่</button>
+      </div>`;
+    return;
+  }
+  if(el){ el.style.display='none'; }
+  $('dashboard-content').style.display='flex';
+  renderKPI(d);
+  renderFsoChart(d);
+  renderBahtChart(d);
+  if(allTicketsRaw.length) renderPivotTable(allTicketsRaw);
+  renderTop5();
+}
+
+function goToTicketsFiltered(step, result){
+  showPage('tickets');
+  // Reset filters first
+  if($('filter-step')){
+    if(step === 'any' || step === undefined) $('filter-step').value = '';
+    else $('filter-step').value = String(step);
+  }
+  if($('filter-result')) $('filter-result').value = result !== undefined ? result : '';
+  // Don't reset province — keep user's locked province
+  if(allTickets.length > 0){
+    filterTickets();
+  } else {
+    // Tickets not loaded yet — load then filter
+    loadTickets().then(()=>filterTickets()).catch(()=>{});
+  }
+}
+
+function renderKPI(d){
+  const pct = d.reviewed_pct || 0;
+  const penaltyPct = d.total ? Math.round(d.fso_penalty/d.total*100) : 0;
+  const noPenaltyPct = 100 - penaltyPct;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => {
+    const v = Number(n||0);
+    return v >= 1000000 ? (v/1000000).toFixed(2) + 'M' : fmt(v);
+  };
+
+  $('kpi-grid').innerHTML = `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:2px">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+      <div style="background:linear-gradient(135deg,#1d4ed8,#0891b2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff">
+        🛡 KPI & SUMMARY DASHBOARD
+      </div>
+      <div style="font-size:11px;color:var(--muted)">BBTEC Smart Defense — NOR1/NOR2</div>
+      <div style="margin-left:auto;display:flex;gap:8px;font-size:11px;color:var(--muted)">
+        <span>📍 Region</span><span>📍 Sub Region</span><span>📍 Province</span>
+      </div>
+    </div>
+
+    <!-- 6 Steps Row -->
+    <div style="display:grid;grid-template-columns:1.4fr 1.5fr 1fr 1fr 1fr 1fr;gap:6px">
+
+      <!-- Step 1 -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#78350f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#fcd34d">STEP 1</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">ENGINEER REVIEW</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Total Ticket</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(d.total)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Reviewed</div>
+            <div style="font-size:20px;font-weight:700;color:#f59e0b">${fmt(d.reviewed)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">% Actual</div>
+            <div style="font-size:20px;font-weight:700;color:#10b981">${pct}%</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Penalty Amount</div>
+          <div style="font-size:15px;font-weight:700;color:#f59e0b">${fmtM(d.total_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #3b82f6">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e3a5f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#93c5fd">STEP 2</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FSO DECISION</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:6px;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ (Penalty)</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.fso_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ (No Penalty)</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.fso_no_penalty)}</div>
+          </div>
+          <div style="position:relative;width:72px;height:72px">
+            <canvas id="chart-fso-mini" width="72" height="72"></canvas>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">
+              <div style="font-size:12px;font-weight:700;color:#ef4444">${penaltyPct}%</div>
+              <div style="font-size:10px;color:#10b981">${noPenaltyPct}%</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+          <div style="background:#fee2e2;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
+            <div style="font-size:13px;font-weight:700;color:#ef4444">${fmtM(d.total_penalty_baht)} บาท</div>
+          </div>
+          <div style="background:#dcfce7;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">Penalty Amount (ไม่ปรับ)</div>
+            <div style="font-size:13px;font-weight:700;color:#10b981">${fmtM(d.saved_baht)} บาท</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#78350f;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#fcd34d">STEP 3</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">DEFEND PROCESS</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fcd34d">ขอ DEFEND</div>
+            <div style="font-size:22px;font-weight:700;color:#f59e0b">${fmt(d.defend_req||0)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">ไม่ Defend (ยอมรับ)</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(d.no_defend||0)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:#f0f2f4;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Defend ครั้งที่ 1</div>
+            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_req||0)}</div>
+          </div>
+          <div style="background:#f0f2f4;border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">Defend ครั้งที่ 2</div>
+            <div style="font-size:16px;font-weight:700;color:#fcd34d">${fmt(d.defend_round2||0)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #10b981">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#064e3b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#6ee7b7">STEP 4</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">BBTEC MANAGER</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ / ยอมรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Penalty Amount (ปรับ)</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #a78bfa">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#2e1065;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#c4b5fd">STEP 5</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FSO MANAGER</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#c4b5fd">อนุมัติแล้ว</div>
+            <div style="font-size:22px;font-weight:700;color:#a78bfa">${fmt(d.approved)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">รอดำเนินการ</div>
+            <div style="font-size:22px;font-weight:700;color:var(--muted)">${fmt(d.pending_approve)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#c4b5fd">Final Penalty Amount</div>
+          <div style="font-size:14px;font-weight:700;color:#a78bfa">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 6 — Final Done -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #6366f1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e1b4b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#a5b4fc">STEP 6</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL DONE</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+      <!-- Step 6 — Final Done -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 10px;border-left:3px solid #6366f1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="background:#1e1b4b;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#a5b4fc">STEP 6</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FINAL DONE</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#6ee7b7">ไม่ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:22px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+          </div>
+        </div>
+        <div style="background:#f0f2f4;border-radius:6px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:#fca5a5">Final Penalty</div>
+          <div style="font-size:14px;font-weight:700;color:#ef4444">${fmtM(d.final_penalty_baht)} บาท</div>
+        </div>
+      </div>
+
+    </div>
+  </div>`;
+
+  // Render mini donut after DOM update
+  setTimeout(()=>{
+    const mini = document.getElementById('chart-fso-mini');
+    if(mini && window.Chart){
+      if(mini._chart) mini._chart.destroy();
+      mini._chart = new Chart(mini,{
+        type:'doughnut',
+        data:{labels:['ปรับ','ไม่ปรับ'],datasets:[{data:[d.fso_penalty||1,d.fso_no_penalty||1],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]},
+        options:{plugins:{legend:{display:false}},cutout:'68%',animation:{duration:600}}
+      });
+    }
+  },100);
+}
+
+function renderFsoChart(d){
+  if(charts.fso) charts.fso.destroy();
+  charts.fso = new Chart($('chart-fso'),{
+    type:'doughnut',
+    data:{
+      labels:['ปรับ','ไม่ปรับ'],
+      datasets:[{data:[d.fso_penalty,d.fso_no_penalty],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]
+    },
+    options:{plugins:{legend:{position:'bottom',labels:{color:'#64748b',font:{size:11}}}},cutout:'65%'}
+  });
+}
+
+function renderBahtChart(d){
+  if(charts.baht) charts.baht.destroy();
+  const fmtShort = v => {
+    if(!v||v===0) return '0';
+    if(Math.abs(v)>=1000000) return (v/1000000).toFixed(1)+'M';
+    if(Math.abs(v)>=1000) return (v/1000).toFixed(0)+'K';
+    return String(Math.round(v));
+  };
+  const total = Number(d.total_penalty_baht)||0;
+  const saved = Number(d.saved_baht)||0;
+  const final = Number(d.final_penalty_baht)||0;
+  charts.baht = new Chart($('chart-baht'),{
+    type:'bar',
+    data:{
+      labels:['รวมทั้งหมด','ลดได้จาก Defend','Final (ปรับ)'],
+      datasets:[{
+        data:[total, saved, final],
+        backgroundColor:['#ef4444','#10b981','#f59e0b'],
+        borderWidth:0, borderRadius:6
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:28 } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>' '+Number(ctx.raw).toLocaleString('th-TH')+' บาท'}},
+        // inline datalabels via afterDraw
+      },
+      scales:{
+        y:{ticks:{color:'#64748b',font:{size:9},callback:v=>fmtShort(v)},grid:{color:'#d8dde3'}},
+        x:{ticks:{color:'#64748b',font:{size:9}},grid:{display:false}}
+      }
+    },
+    plugins:[{
+      id:'topLabels',
+      afterDatasetsDraw(chart){
+        const {ctx, data} = chart;
+        chart.getDatasetMeta(0).data.forEach((bar, i)=>{
+          const v = data.datasets[0].data[i];
+          if(!v) return;
+          const label = fmtShort(v);
+          ctx.save();
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillStyle = '#1a2332';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      }
+    }]
+  });
+}
+
+// ── Tickets ──
+let sortCol = 'PENALTYBAHT_TRACKB';
+let sortDir = 'desc';
+
+async function loadTickets(){
+  return new Promise(async (resolve, reject) => {
+  try {
+    const data = await fetchWithRetry(`${API}/api/tickets`, {credentials:'include'});
+    if(data.error){
+      const el = $('tickets-loading');
+      if(el) el.innerHTML = `
+        <div style="text-align:center;padding:24px">
+          <div style="font-size:13px;color:var(--red);margin-bottom:10px">⚠️ โหลด Ticket ไม่สำเร็จ</div>
+          <button onclick="loadTickets()" style="padding:5px 16px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:12px">🔄 ลองใหม่</button>
+        </div>`;
+      reject(data.error); return;
+    }
+    allTicketsRaw = mergeServerTickets(data.tickets || []);
+    allTickets = [...allTicketsRaw].sort((a,b)=>{
+      const av = parseFloat(String(a.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+      const bv = parseFloat(String(b.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+      return bv - av;
+    });
+    $('tickets-loading').style.display='none';
+    $('ticket-table').style.display='table';
+    // Province filter from TRUEOWNERGROUP values in tickets
+    const allGroups = [...new Set(allTickets.map(t=>t.TRUEOWNERGROUP||'').filter(Boolean))].sort();
+    const pSel = $('filter-province');
+    if(pSel){
+      // Clear existing options except first
+      while(pSel.options.length > 1) pSel.remove(1);
+      
+      const userProvinces = (currentUser?.province||'').split(',').map(p=>p.trim()).filter(p=>p&&p.toUpperCase()!=='ALL');
+      const isLocked = userProvinces.length > 0;
+      
+      if(isLocked){
+        // User has specific provinces — only show those, disable filter
+        userProvinces.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p;
+          const short = p.replace('TRUE-TH-BBT-','').replace('-NOP','');
+          o.textContent = short;
+          pSel.appendChild(o);
+        });
+        // Auto-select first province, lock to it
+        if(userProvinces.length === 1){
+          pSel.value = userProvinces[0];
+          pSel.disabled = true;
+          pSel.title = 'ถูกจำกัดตามสิทธิ์';
+        }
+      } else {
+        // Manager/Regional — show all groups grouped by NOR1/NOR2
+        allGroups.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p;
+          const short = p.replace('TRUE-TH-BBT-','').replace('-NOP','');
+          o.textContent = short;
+          pSel.appendChild(o);
+        });
+      }
+    }
+    renderTop5();  // update top5 after tickets load
+    // Render with slight delay to ensure province select is fully set
+    setTimeout(()=>{
+      renderTicketTable(getFilteredTickets());
+      renderTicketsKPI(getFilteredTickets());
+      renderPivotTable(allTicketsRaw);
+    }, 50);
+  } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ'; reject(e); }
+  resolve();
+  });
+}
+
+function getFilteredTickets(){
+  const q = ($('search-tickets')?.value||'').toLowerCase();
+  const step = $('filter-step')?.value||'';
+  const result = $('filter-result')?.value||'';
+  const province = $('filter-province')?.value||'';
+  return allTickets.filter(t => {
+    const matchQ = !q || (t.TICKETID||'').toLowerCase().includes(q) || (t.SUBJECT||'').toLowerCase().includes(q);
+    const tStep = String(t.STEP||'').trim();
+    const matchStep = !step || tStep === step || (step==='0' && (tStep===''||tStep==='0'));
+    const matchResult = !result || t.FINAL_RESULT === result;
+    const matchProv = !province || (t.TRUEOWNERGROUP||'') === province;
+    return matchQ && matchStep && matchResult && matchProv;
+  });
+}
+
+function sortTable(col){
+  if(sortCol === col) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortCol=col; sortDir = col==='PENALTYBAHT_TRACKB'?'desc':'asc'; }
+  // Update header icons
+  document.querySelectorAll('.sortable').forEach(th=>{
+    th.classList.remove('sort-asc','sort-desc');
+    const icon = th.querySelector('.sort-icon');
+    if(icon) icon.textContent='⇅';
+  });
+  const activeH = document.querySelector(`[data-col="${col}"]`);
+  if(activeH){
+    activeH.classList.add(sortDir==='asc'?'sort-asc':'sort-desc');
+    const icon = activeH.querySelector('.sort-icon');
+    if(icon) icon.textContent = sortDir==='asc'?'↑':'↓';
+  }
+  renderTicketTable(getFilteredTickets());
+}
+
+function stepBadge(step, defendCount, fsoDecision, finalResult, mgrDefend){
+  const s   = String(step||'').trim();
+  const dc  = parseInt(String(defendCount||'0').replace(/\/[^]*/,''))||0;
+  const fso = String(fsoDecision||'').trim();
+  const fr  = String(finalResult||'').trim();
+  const mgr = String(mgrDefend||'').trim();
+
+  if(!s || s==='0') return '<span class="badge badge-pending">⬜ รอ Step 1</span>';
+  if(s==='1')       return '<span class="badge badge-1">✅ Step 1</span>';
+  if(s==='2'){
+    if(fso==='ปรับ') return '<span class="badge badge-2" style="background:#fef3c7;color:#92400e">⚠️ FSO: ปรับ</span>';
+    if(fso==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ FSO: ไม่ปรับ</span>';
+    return '<span class="badge badge-2">Step 2</span>';
+  }
+  if(s==='3')  return `<span class="badge badge-3">⚔️ Defend ${dc}/2 — รอ FSO</span>`;
+  if(s==='4')  return '<span class="badge badge-4" style="background:#dbeafe;color:#1d4ed8">📋 รอ BBTEC Manager</span>';
+  if(s==='5'){
+    if(mgr) return '<span class="badge badge-3" style="background:#fef3c7;color:#92400e">⚔️ Manager Defend — รอ FSO Mgr</span>';
+    return '<span class="badge badge-5" style="background:#ede9fe;color:#5b21b6">📋 รอ FSO Manager</span>';
+  }
+  if(s==='6'){
+    if(fr==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ Final: ไม่ปรับ</span>';
+    return '<span class="badge badge-penalty">🔒 Final: ปรับ</span>';
+  }
+  return `<span class="badge badge-pending">${s}</span>`;
+}
+
+function resultBadge(r){
+  if(r==='ปรับ') return `<span class="badge badge-penalty">ปรับ</span>`;
+  if(r==='ไม่ปรับ') return `<span class="badge badge-no-penalty">ไม่ปรับ</span>`;
+  return '<span style="color:#8aa0c0">—</span>';
+}
+
+function renderTicketTable(tickets){
+  const tbody = $('ticket-tbody');
+  if(!tickets.length){
+    tbody.innerHTML='<tr class="empty-row"><td colspan="8">ไม่พบข้อมูล</td></tr>'; return;
+  }
+  // Sort
+  const sorted = [...tickets].sort((a,b)=>{
+    let av = a[sortCol]||'', bv = b[sortCol]||'';
+    if(sortCol==='PENALTYBAHT_TRACKB'){
+      av = parseFloat(String(av).replace(/,/g,''))||0;
+      bv = parseFloat(String(bv).replace(/,/g,''))||0;
+      return sortDir==='asc' ? av-bv : bv-av;
+    }
+    if(sortCol==='STEP'){
+      av = parseInt(av)||0; bv = parseInt(bv)||0;
+      return sortDir==='asc' ? av-bv : bv-av;
+    }
+    av = String(av).toLowerCase(); bv = String(bv).toLowerCase();
+    return sortDir==='asc' ? av.localeCompare(bv,'th') : bv.localeCompare(av,'th');
+  });
+  // Show/hide bulk select column based on role
+  const showBulk = canUseBulkSelect(currentUser?.role);
+  const cbWrap = $('cb-all-wrap');
+  if(cbWrap) cbWrap.innerHTML = showBulk ? '<input type="checkbox" class="cb-ticket" id="cb-all" title="เลือกทั้งหมด" onchange="toggleSelectAll(this)"/>' : '';
+  const thCbHead = $('th-cb-head');
+  if(thCbHead) thCbHead.innerHTML = showBulk ? '<input type="checkbox" class="cb-ticket" id="cb-head" onchange="toggleSelectAll(this)"/>' : '';
+  const bulkBtn = $('btn-bulk-approve');
+  if(bulkBtn) bulkBtn.style.display = 'none'; // always reset; updateBulkBtn will show if needed
+  const cbCell = showBulk
+    ? (id) => `<input type="checkbox" class="cb-ticket ticket-cb" data-id="${id}" onchange="updateBulkBtn()"/>`
+    : () => '';
+  tbody.innerHTML = sorted.map(t => `
+    <tr>
+      <td>${cbCell(t.TICKETID||'')}</td>
+      <td><span class="tid">${t.TICKETID||'—'}</span></td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.SUBJECT||'').replace(/"/g,'')}">${t.SUBJECT||'—'}</td>
+      <td style="white-space:nowrap">${t.TrackB_Region||'—'}</td>
+      <td style="text-align:right;font-weight:600;color:${parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))>0?'var(--red)':'var(--muted)'}">${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
+      <td>${resultBadge(t['FSO พิจารณา (ปรับ/ไม่ปรับ)'])}</td>
+      <td>${stepBadge(t.STEP, t.DEFEND_COUNT, t['FSO พิจารณา (ปรับ/ไม่ปรับ)'], t.FINAL_RESULT, t.MANAGER_DEFEND)}</td>
+      <td>${resultBadge(t.FINAL_RESULT)}</td>
+      <td><button class="btn-action" onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>จัดการ</button></td>
+    </tr>
+  `).join('');
+}
+
+function filterTickets(){
+  const filtered = getFilteredTickets();
+  renderTicketTable(filtered);
+  renderTicketsKPI(filtered);
+  // Show/hide clear filter button
+  const hasFilter = ($('search-tickets')?.value||'') ||
+    ($('filter-province')?.value||'') ||
+    ($('filter-step')?.value||'') ||
+    ($('filter-result')?.value||'');
+  const btn = $('btn-clear-filter');
+  if(btn) btn.style.display = hasFilter ? 'inline-block' : 'none';
+}
+
+function clearMyFilters(){
+  if($('my-search')) $('my-search').value='';
+  if($('my-filter-step')) $('my-filter-step').value='';
+  if($('my-filter-fso')) $('my-filter-fso').value='';
+  renderMyTickets();
+}
+
+function clearFilters(){
+  if($('search-tickets')) $('search-tickets').value = '';
+  if($('filter-step')) $('filter-step').value = '';
+  if($('filter-result')) $('filter-result').value = '';
+  const userProvinces = (currentUser?.province||'').split(',').map(p=>p.trim()).filter(p=>p&&p.toUpperCase()!=='ALL');
+  if(userProvinces.length === 0 && $('filter-province')) $('filter-province').value = '';
+  filterTickets();
+  showToast('ปลด filter ทั้งหมดแล้ว ✓', 'success');
+}
+
+async function syncProductivity(btn){
+  if(!confirm('Sync Productivity จาก Google Sheet → Database?\n\n⚠️ มีข้อมูล ~90,000 rows ใช้เวลาประมาณ 2-3 นาที\nระบบจะทำงานใน background ไม่กระทบการใช้งาน')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Syncing...'; }
+  try {
+    const res = await fetch(`${API}/api/sync/productivity`, {method:'POST', credentials:'include'});
+    const data = await res.json();
+    if(data.success){
+      showToast('✅ เริ่ม Sync Productivity แล้ว — ใช้เวลา ~2-3 นาที', 'success');
+    } else {
+      showToast(`❌ ${data.error}`, 'error');
+    }
+  } catch(e){
+    showToast('❌ ไม่สามารถ Sync ได้', 'error');
+  }
+  if(btn){ btn.disabled=false; btn.textContent='📊 Sync Productivity'; }
+}
+
+async function syncFromSheets(btn){
+  // ── ตรวจสอบ ticket ที่อยู่ระหว่าง workflow ก่อน Sync ──
+  const inProgress = allTickets.filter(t => {
+    const s = String(t.STEP||'').trim();
+    return s==='1' || s==='2' || s==='3' || s==='4' || s==='5';
+  });
+
+  // แบ่งกลุ่มตาม step
+  const groups = {
+    '1': inProgress.filter(t=>t.STEP==='1').length,
+    '2': inProgress.filter(t=>t.STEP==='2').length,
+    '3': inProgress.filter(t=>t.STEP==='3').length,
+    '4': inProgress.filter(t=>t.STEP==='4').length,
+    '5': inProgress.filter(t=>t.STEP==='5').length,
+  };
+
+  let warningMsg = '⬇️ Sync ข้อมูลจาก Google Sheets → Database\n\n';
+
+  if(inProgress.length > 0){
+    warningMsg += `⚠️  คำเตือน: พบ ${inProgress.length} ticket ที่กำลังดำเนินการอยู่!\n\n`;
+    if(groups['1']) warningMsg += `  • Step 1 (รอ FSO):       ${groups['1']} ticket\n`;
+    if(groups['2']) warningMsg += `  • Step 2 (FSO ตัดสินแล้ว): ${groups['2']} ticket\n`;
+    if(groups['3']) warningMsg += `  • Step 3 (กำลัง Defend):  ${groups['3']} ticket\n`;
+    if(groups['4']) warningMsg += `  • Step 4 (รอ Manager):    ${groups['4']} ticket\n`;
+    if(groups['5']) warningMsg += `  • Step 5 (รอ FSO Manager): ${groups['5']} ticket\n`;
+    warningMsg += '\n⛔ ถ้า Google Sheets ไม่มีข้อมูล workflow เหล่านี้\n';
+    warningMsg += '   ticket จะถูก RESET กลับไปเป็น Step 0!\n\n';
+    warningMsg += '✅ ควร Sync เฉพาะเมื่อ Sheets มีข้อมูลครบถ้วน\n\n';
+    warningMsg += 'ยืนยันที่จะ Sync ต่อไปหรือไม่?';
+  } else {
+    warningMsg += '✅ ไม่มี ticket ที่กำลังดำเนินการอยู่\n';
+    warningMsg += 'Ticket ที่ลบออกจาก Sheets จะถูกลบออกจาก DB ด้วย\n\n';
+    warningMsg += 'ยืนยัน Sync?';
+  }
+
+  if(!confirm(warningMsg)) return;
+
+  // ถ้ามี ticket in-progress ให้ confirm อีกครั้ง
+  if(inProgress.length > 0){
+    if(!confirm(`⚠️ ยืนยันอีกครั้ง\n\nคุณแน่ใจหรือไม่ที่จะ Sync ทั้งที่มี ${inProgress.length} ticket กำลังดำเนินการอยู่?`)) return;
+  }
+
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Syncing...'; }
+  try {
+    const res = await fetch(`${API}/api/sync`, {method:'POST', credentials:'include'});
+    const data = await res.json();
+    if(data.success){
+      showToast(`✅ Sync สำเร็จ — ${data.synced} tickets`, 'success');
+      Object.keys(_optimisticLocks).forEach(k => delete _optimisticLocks[k]);
+      await loadTickets();
+      await loadDashboard();
+    } else {
+      showToast(`❌ Sync ไม่สำเร็จ: ${data.error}`, 'error');
+    }
+  } catch(e){
+    showToast('❌ ไม่สามารถ Sync ได้', 'error');
+  }
+  if(btn){ btn.disabled=false; btn.textContent='⬇️ Sync'; }
+}
+
+async function refreshTickets(btn){
+  if(btn){ btn.disabled = true; btn.textContent = '⏳'; }
+  Object.keys(_optimisticLocks).forEach(k => delete _optimisticLocks[k]);
+  try {
+    await loadTickets();
+    await loadDashboard();
+    showToast('รีเฟรชข้อมูลสำเร็จ ✓', 'success');
+  } catch(e){
+    showToast('รีเฟรชไม่สำเร็จ', 'error');
+  }
+  if(btn){ btn.disabled = false; btn.textContent = '🔄'; }
+}
+
+// ── Tickets Page Mini KPI ──
+function renderTicketsKPI(tickets){
+  const el = $('tickets-kpi');
+  if(!el) return;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M บาท':fmt(v)+' บาท'; };
+  const total = tickets.length;
+  const reviewed = tickets.filter(t=>t.STEP&&t.STEP!=='0').length;
+  const penalty = tickets.filter(t=>t.FINAL_RESULT==='ปรับ').length;
+  const noPenalty = tickets.filter(t=>t.FINAL_RESULT==='ไม่ปรับ').length;
+  const pending = tickets.filter(t=>!t.STEP||t.STEP==='0'||t.STEP==='1').length;
+  const totalBaht = tickets.reduce((s,t)=>s+(parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const finalBaht = tickets.filter(t=>t.FINAL_RESULT==='ปรับ').reduce((s,t)=>s+(parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:2px">
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('','');showPage('tickets')">
+        <div style="font-size:10px;color:var(--muted)">Total (กรอง)</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text)">${fmt(total)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('any','')">
+        <div style="font-size:10px;color:var(--muted)">Reviewed</div>
+        <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(reviewed)}</div>
+        <div style="font-size:10px;color:var(--muted)">${total?Math.round(reviewed/total*100):0}% actual</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted)">รอดำเนินการ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--amber)">${fmt(pending)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('4','ปรับ')">
+        <div style="font-size:10px;color:var(--muted)">Final: ปรับ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--red)">${fmt(penalty)}</div>
+        <div style="font-size:10px;color:var(--muted)">${fmtM(finalBaht)}</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('4','ไม่ปรับ')">
+        <div style="font-size:10px;color:var(--muted)">Final: ไม่ปรับ</div>
+        <div style="font-size:20px;font-weight:700;color:var(--green)">${fmt(noPenalty)}</div>
+        <div style="font-size:10px;color:var(--muted)">tickets</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:8px;padding:10px 12px;cursor:pointer" onclick="goToTicketsFiltered('','')">
+        <div style="font-size:10px;color:var(--muted)">Penalty รวม</div>
+        <div style="font-size:14px;font-weight:700;color:var(--red)">${fmtM(totalBaht)}</div>
+        <div style="font-size:10px;color:var(--green)">ลดได้: ${fmtM(totalBaht-finalBaht)}</div>
+      </div>
+    </div>`;
+}
+
+// ── Pivot Table by Province ──
+function renderPivotTable(tickets){
+  const wrap = $('pivot-table-wrap');
+  if(!wrap) return;
+  const fmt = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmt(v); };
+  const GRAND_TOTAL = tickets.filter(t=>t.TICKETID).length || 1;
+  function nc(n, cls){
+    if(!n) return '<td style="text-align:center;color:var(--muted)">—</td>';
+    const p = (n/GRAND_TOTAL*100).toFixed(1);
+    return `<td style="text-align:center" class="${cls||''}">${n}<span style="display:block;font-size:9px;color:var(--muted)">${p}%</span></td>`;
+  }
+  // Helper: normalize group name — merge WIFI into base province group
+  function normalizeGroup(ownerGroup) {
+    if(!ownerGroup) return 'Unknown';
+    // e.g. "BBT-NOR1-CMI1-WIFI" → "TRUE-TH-BBT-NOR1-CMI1-NOP" (merge into NOP group)
+    // "TRUE-TH-BBT-NOR1-CMI1-NOP" stays as is
+    const g = ownerGroup.replace('TRUE-TH-BBT-','').replace('-NOP','');
+    // If contains WIFI, strip it and map to the province
+    if(g.includes('-WIFI')) {
+      return g.replace('-WIFI','').replace('BBT-','TRUE-TH-BBT-') + '-NOP';
+    }
+    return ownerGroup;
+  }
+
+  // Group by NOR region → TRUEOWNERGROUP (WIFI merged into province)
+  const regionMap = {};
+  tickets.forEach(t => {
+    if(!t.TICKETID) return;
+    // Determine region: NOR1 or NOR2 from TrackB_Region
+    const reg = (t.TrackB_Region||'').includes('NOR2') || (t.TRUEOWNERGROUP||'').includes('NOR2') ? 'NOR2' : 'NOR1';
+    const grp = normalizeGroup(t.TRUEOWNERGROUP) || 'Unknown';
+    if(!regionMap[reg]) regionMap[reg] = {};
+    if(!regionMap[reg][grp]) regionMap[reg][grp] = {total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
+    const d = regionMap[reg][grp];
+    d.total++;
+    const s = String(t.STEP||'').trim();
+    if(s==='1') d.s1++;
+    if(s==='2') d.s2++;
+    if(s==='3') d.s3++;
+    if(s==='4') d.s4++;
+    if(s==='5') d.s5++;
+    if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.s6p++;
+    if(s==='6'&&t.FINAL_RESULT==='ไม่ปรับ') d.s6n++;
+    d.baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+    if(s==='6'&&t.FINAL_RESULT==='ปรับ') d.final_baht += parseFloat(String(t.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0;
+  });
+
+  // %S1 heat badge: 0%=red, 1-30%=amber, 31-70%=blue, 71-99%=green, 100%=purple
+  function pctBadge(pct){
+    let cls = 'pct-0';
+    if(pct===100) cls='pct-full';
+    else if(pct>=71) cls='pct-high';
+    else if(pct>=31) cls='pct-mid';
+    else if(pct>=1) cls='pct-low';
+    return `<span class="pct-badge ${cls}">${pct}%</span>`;
+  }
+
+  let rows = `<table class="pivot-table">
+    <thead>
+      <tr>
+        <th rowspan="2">Region</th>
+        <th rowspan="2" style="text-align:left">Owner Group</th>
+        <th rowspan="2">Total</th>
+        <th style="background:#E6F1FB;color:#185FA5;border-bottom:0">S1<br><span style="font-size:8px">Engineer</span></th>
+        <th style="background:#E6F1FB;color:#185FA5;border-bottom:0">%S1</th>
+        <th style="background:#FAEEDA;color:#854F0B;border-bottom:0">S2<br><span style="font-size:8px">FSO</span></th>
+        <th style="background:#FAECE7;color:#993C1D;border-bottom:0">S3<br><span style="font-size:8px">Defend</span></th>
+        <th style="background:#EEEDFE;color:#534AB7;border-bottom:0">S4<br><span style="font-size:8px">Mgr</span></th>
+        <th style="background:#E1F5EE;color:#0F6E56;border-bottom:0">S5<br><span style="font-size:8px">FSO Mgr</span></th>
+        <th style="background:#FCEBEB;color:#A32D2D;border-bottom:0">S6<br><span style="font-size:8px">ปรับ</span></th>
+        <th style="background:#EAF3DE;color:#3B6D11;border-bottom:0">S6<br><span style="font-size:8px">ไม่ปรับ</span></th>
+        <th rowspan="2" style="text-align:right">Penalty<br>รวม (M)</th>
+        <th rowspan="2" style="text-align:right">Final<br>ปรับ (M)</th>
+        <th rowspan="2" style="text-align:right">ลดได้<br>(M)</th>
+      </tr>
+      <tr>
+        <th style="background:#E6F1FB;font-size:8px;color:#185FA5;padding:2px 4px">n/%</th>
+        <th style="background:#E6F1FB;font-size:8px;color:#185FA5;padding:2px 4px">%</th>
+        <th style="background:#FAEEDA;font-size:8px;color:#854F0B;padding:2px 4px">n/%</th>
+        <th style="background:#FAECE7;font-size:8px;color:#993C1D;padding:2px 4px">n/%</th>
+        <th style="background:#EEEDFE;font-size:8px;color:#534AB7;padding:2px 4px">n/%</th>
+        <th style="background:#E1F5EE;font-size:8px;color:#0F6E56;padding:2px 4px">n/%</th>
+        <th style="background:#FCEBEB;font-size:8px;color:#A32D2D;padding:2px 4px">n/%</th>
+        <th style="background:#EAF3DE;font-size:8px;color:#3B6D11;padding:2px 4px">n/%</th>
+      </tr>
+    </thead><tbody>`;
+
+  let grandTotal={total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
+
+  ['NOR1','NOR2'].forEach(reg => {
+    if(!regionMap[reg]) return;
+    const groups = Object.entries(regionMap[reg]).sort((a,b)=>b[1].total-a[1].total);
+    let regT={total:0,s1:0,s2:0,s3:0,s4:0,s5:0,s6p:0,s6n:0,baht:0,final_baht:0};
+    groups.forEach(([grp,d])=>{
+      Object.keys(regT).forEach(k=>regT[k]+=d[k]);
+      const pct = d.total ? Math.round(d.s1/d.total*100) : 0;
+      const grpShort = grp.replace('TRUE-TH-BBT-','').replace('-NOP','');
+      rows += `<tr class="data-row" onclick="filterByOwnerGroup('${grp.replace(/'/g,"\\'")}')">
+        <td style="color:var(--muted);font-size:10px">${reg}</td>
+        <td style="font-size:10px" title="คลิกเพื่อกรอง">${grpShort}</td>
+        <td style="text-align:center">${fmt(d.total)}<span style="display:block;font-size:9px;color:var(--muted)">${(d.total/GRAND_TOTAL*100).toFixed(1)}%</span></td>
+        ${nc(d.s1,'num-amber')}
+        <td style="text-align:center">${pctBadge(pct)}</td>
+        ${nc(d.s2,'num-blue')}
+        ${nc(d.s3,'num-amber')}
+        ${nc(d.s4,'num-blue')}
+        ${nc(d.s5,'num-green')}
+        ${nc(d.s6p,'num-red')}
+        ${nc(d.s6n,'num-green')}
+        <td style="text-align:right" class="num-red">${fmtM(d.baht)}</td>
+        <td style="text-align:right" class="num-red">${fmtM(d.final_baht)}</td>
+        <td style="text-align:right" class="num-green">${fmtM(Math.max(0,d.baht-d.final_baht))}</td>
+      </tr>`;
+    });
+    const rpct = regT.total ? Math.round(regT.s1/regT.total*100) : 0;
+    rows += `<tr class="region-row">
+      <td colspan="2" style="text-align:left">🔷 ${reg} รวม</td>
+      <td style="text-align:center">${fmt(regT.total)}<span style="display:block;font-size:9px;opacity:.7">${(regT.total/GRAND_TOTAL*100).toFixed(1)}%</span></td>
+      <td style="text-align:center">${regT.s1||'—'}</td>
+      <td style="text-align:center">${pctBadge(rpct)}</td>
+      <td style="text-align:center">${regT.s2||'—'}</td>
+      <td style="text-align:center">${regT.s3||'—'}</td>
+      <td style="text-align:center">${regT.s4||'—'}</td>
+      <td style="text-align:center">${regT.s5||'—'}</td>
+      <td style="text-align:center;color:#A32D2D;font-weight:600">${regT.s6p||'—'}</td>
+      <td style="text-align:center;color:#0F6E56;font-weight:600">${regT.s6n||'—'}</td>
+      <td style="text-align:right">${fmtM(regT.baht)}</td>
+      <td style="text-align:right;color:#A32D2D">${fmtM(regT.final_baht)}</td>
+      <td style="text-align:right;color:#0F6E56">${fmtM(regT.baht-regT.final_baht)}</td>
+    </tr>`;
+    Object.keys(grandTotal).forEach(k=>grandTotal[k]+=regT[k]);
+  });
+
+  const gpct = grandTotal.total ? Math.round(grandTotal.s1/grandTotal.total*100) : 0;
+  rows += `<tr class="total-row">
+    <td colspan="2" style="text-align:left">⭐ Grand Total NOR1+NOR2</td>
+    <td style="text-align:center">${fmt(grandTotal.total)}<span style="display:block;font-size:9px;opacity:.7">100%</span></td>
+    <td style="text-align:center">${grandTotal.s1||'—'}</td>
+    <td style="text-align:center">${pctBadge(gpct)}</td>
+    <td style="text-align:center">${grandTotal.s2||'—'}</td>
+    <td style="text-align:center">${grandTotal.s3||'—'}</td>
+    <td style="text-align:center">${grandTotal.s4||'—'}</td>
+    <td style="text-align:center">${grandTotal.s5||'—'}</td>
+    <td style="text-align:center;color:#A32D2D;font-weight:700">${grandTotal.s6p||'—'}</td>
+    <td style="text-align:center;color:#0F6E56;font-weight:700">${grandTotal.s6n||'—'}</td>
+    <td style="text-align:right">${fmtM(grandTotal.baht)}</td>
+    <td style="text-align:right;color:#A32D2D;font-weight:700">${fmtM(grandTotal.final_baht)}</td>
+    <td style="text-align:right;color:#0F6E56;font-weight:700">${fmtM(grandTotal.baht-grandTotal.final_baht)}</td>
+  </tr></tbody></table>`;
+
+  wrap.innerHTML = rows;
+}
+
+// ── My Tickets ──
+function renderMyTickets(){
+  const role = currentUser?.role || '';
+  let filtered = [];
+  let title = 'Ticket ที่รอดำเนินการ';
+
+  if(isEngineerRole(role)){
+    // Engineer เห็น: รอ submit + submit แล้ว + FSO สั่งปรับ (รอ Defend/ยอมรับ) + กำลัง Defend
+    filtered = allTickets.filter(t => {
+      const s = String(t.STEP||'').trim();
+      const fso = String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim();
+      const locked = String(t.LOCKED||'').toUpperCase()==='TRUE';
+      if(locked) return false; // ticket lock แล้วไม่ต้องทำอะไร
+      return !s || s==='' || s==='0' || s==='1'
+        || (s==='2' && fso==='ปรับ')  // FSO สั่งปรับ รอ Engineer ขอ Defend หรือยอมรับ
+        || s==='3'; // กำลัง Defend อยู่
+    });
+    title = 'Ticket ที่รอฉัน (Engineer)';
+  } else if(isFSORole(role)){
+    // FSO เห็น: Engineer submit แล้ว (step 1) + Engineer ขอ Defend (step 3)
+    filtered = allTickets.filter(t => t.STEP==='1' || t.STEP==='3');
+    title = 'Ticket รอ FSO พิจารณา';
+  } else if(isFSOManagerRole(role)){
+    // FSO Manager เห็น step=5 ทั้งหมด (BBTEC Manager approve แล้ว รอ FSO Manager)
+    filtered = allTickets.filter(t => String(t.STEP||'').trim()==='5');
+    title = 'Ticket รอ FSO Manager Final Approve';
+  } else if(isManagerRole(role)){
+    // BBTEC Manager เห็น step=4 (รอ Manager review)
+    filtered = allTickets.filter(t => String(t.STEP||'').trim()==='4');
+    title = 'Ticket รอ BBTEC Manager';
+  }
+
+  $('my-tickets-title').textContent = title;
+
+  // Apply search/filter
+  const mySearch = ($('my-search')?.value||'').toLowerCase();
+  const myStep   = $('my-filter-step')?.value||'';
+  const myFso    = $('my-filter-fso')?.value||'';
+  if(mySearch || myStep || myFso){
+    filtered = filtered.filter(t => {
+      const matchSearch = !mySearch || (t.TICKETID||'').toLowerCase().includes(mySearch) || (t.SUBJECT||'').toLowerCase().includes(mySearch);
+      const matchStep   = !myStep   || String(t.STEP||'').trim() === myStep;
+      const matchFso    = !myFso    || String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim() === myFso;
+      return matchSearch && matchStep && matchFso;
+    });
+  }
+  const hasMyFilter = mySearch || myStep || myFso;
+  const btnClear = $('btn-clear-my');
+  if(btnClear) btnClear.style.display = hasMyFilter ? 'inline-block' : 'none';
+
+  $('my-tbody').innerHTML = filtered.length
+    ? filtered.map(t => `
+        <tr>
+          <td><span class="tid">${t.TICKETID}</span></td>
+          <td>${(t.SUBJECT||'').substring(0,60)}</td>
+          <td style="text-align:right;color:var(--red);font-weight:600">${fmtBaht(t.PENALTYBAHT_TRACKB)}</td>
+          <td style="text-align:center">${t.DEFEND_COUNT||'0'} / 2</td>
+          <td>${stepBadge(t.STEP, t.DEFEND_COUNT, t['FSO พิจารณา (ปรับ/ไม่ปรับ)'], t.FINAL_RESULT, t.MANAGER_DEFEND)}</td>
+          <td>${resultBadge(t['FSO พิจารณา (ปรับ/ไม่ปรับ)'])}</td>
+          <td>${resultBadge(t.FINAL_RESULT)}</td>
+          <td><button class="btn-action" onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>ดำเนินการ</button></td>
+        </tr>
+      `).join('')
+    : '<tr class="empty-row"><td colspan="8">ไม่มี Ticket ที่รอดำเนินการ</td></tr>';
+}
+
+// ── Charts ──
+function renderCharts(){
+  const el = $('exec-summary');
+  if(!el) return;
+  const t = allTickets;
+  const fmtN = n => Number(n||0).toLocaleString('th-TH');
+  const fmtM = n => { const v=Number(n||0); return v>=1000000?(v/1000000).toFixed(2)+'M':fmtN(v); };
+
+  const total = t.length;
+  const reviewed = t.filter(x=>x.STEP&&x.STEP!=='0').length;
+  const step2 = t.filter(x=>['2','3','4','5'].includes(x.STEP)).length;
+  const defended = t.filter(x=>parseInt(x.DEFEND_COUNT||0)>0).length;
+  const defendWon = t.filter(x=>parseInt(x.DEFEND_COUNT||0)>0&&x.FINAL_RESULT==='ไม่ปรับ').length;
+  const finalPenalty = t.filter(x=>x.FINAL_RESULT==='ปรับ').length;
+  const finalNoPenalty = t.filter(x=>x.FINAL_RESULT==='ไม่ปรับ').length;
+  const approved = t.filter(x=>x.STEP==='5').length;
+  const totalBaht = t.reduce((s,x)=>s+(parseFloat(String(x.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const finalBaht = t.filter(x=>x.FINAL_RESULT==='ปรับ').reduce((s,x)=>s+(parseFloat(String(x.PENALTYBAHT_TRACKB||'0').replace(/,/g,''))||0),0);
+  const savedBaht = Math.max(0, totalBaht - finalBaht);
+  const defendRate = defended>0?Math.round(defendWon/defended*100):0;
+  const completionRate = total>0?Math.round((finalPenalty+finalNoPenalty)/total*100):0;
+
+  // Top pending by owner group
+  const groupMap = {};
+  t.filter(x=>!x.STEP||x.STEP==='0'||x.STEP==='1').forEach(x=>{
+    const g = (x.TRUEOWNERGROUP||'Unknown').replace('TRUE-TH-BBT-','').replace('-NOP','');
+    groupMap[g] = (groupMap[g]||0)+1;
+  });
+  const topGroups = Object.entries(groupMap).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  const metrics = [
+    {l:'Total Tickets', v:fmtN(total), c:'var(--text)'},
+    {l:'Engineer Reviewed', v:fmtN(reviewed)+' ('+Math.round(reviewed/total*100||0)+'%)', c:'var(--amber)'},
+    {l:'FSO Processed', v:fmtN(step2)+' ('+Math.round(step2/total*100||0)+'%)', c:'var(--accent)'},
+    {l:'ขอ Defend ทั้งหมด', v:fmtN(defended)+' tickets', c:'var(--amber)'},
+    {l:'Defend สำเร็จ (ไม่ปรับ)', v:fmtN(defendWon)+' ('+defendRate+'%)', c:'var(--green)'},
+    {l:'Final: ปรับ', v:fmtN(finalPenalty)+' tickets', c:'var(--red)'},
+    {l:'Final: ไม่ปรับ', v:fmtN(finalNoPenalty)+' tickets', c:'var(--green)'},
+    {l:'Manager Approved', v:fmtN(approved)+' tickets', c:'var(--purple)'},
+    {l:'Completion Rate', v:completionRate+'%', c:completionRate>70?'var(--green)':'var(--amber)'},
+  ];
+
+  let metricsHTML = '';
+  metrics.forEach(r => {
+    metricsHTML += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">';
+    metricsHTML += '<span style="font-size:12px;color:var(--muted)">'+r.l+'</span>';
+    metricsHTML += '<span style="font-size:13px;font-weight:600;color:'+r.c+'">'+r.v+'</span>';
+    metricsHTML += '</div>';
+  });
+
+  let barsHTML = '';
+  topGroups.forEach(function(entry, i) {
+    const g = entry[0], n = entry[1];
+    const barW = Math.round(n/topGroups[0][1]*100);
+    const barColor = i===0?'#ef4444':i<3?'#f59e0b':'#3b82f6';
+    barsHTML += '<div>';
+    barsHTML += '<div style="display:flex;justify-content:space-between;margin-bottom:3px">';
+    barsHTML += '<span style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">'+g+'</span>';
+    barsHTML += '<span style="font-size:11px;font-weight:600;color:var(--amber)">'+n+'</span>';
+    barsHTML += '</div>';
+    barsHTML += '<div style="height:6px;background:var(--border);border-radius:3px">';
+    barsHTML += '<div style="height:100%;width:'+barW+'%;background:'+barColor+';border-radius:3px"></div>';
+    barsHTML += '</div></div>';
+  });
+
+  el.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">📈 Executive Summary</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + metricsHTML + '</div>' +
+      '</div>' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">💰 Penalty Breakdown</div>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+          '<div style="background:#fee2e2;border-radius:8px;padding:12px;text-align:center">' +
+            '<div style="font-size:10px;color:#fca5a5">ค่าปรับรวมทั้งหมด</div>' +
+            '<div style="font-size:24px;font-weight:700;color:#ef4444">'+fmtM(totalBaht)+'</div>' +
+            '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div style="background:#dcfce7;border-radius:8px;padding:10px;text-align:center">' +
+              '<div style="font-size:10px;color:#6ee7b7">ลดได้จาก Defend</div>' +
+              '<div style="font-size:18px;font-weight:700;color:#10b981">'+fmtM(savedBaht)+'</div>' +
+              '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+            '</div>' +
+            '<div style="background:#fee2e2;border-radius:8px;padding:10px;text-align:center">' +
+              '<div style="font-size:10px;color:#fca5a5">Final Penalty</div>' +
+              '<div style="font-size:18px;font-weight:700;color:#ef4444">'+fmtM(finalBaht)+'</div>' +
+              '<div style="font-size:10px;color:var(--muted)">บาท</div>' +
+            '</div>' +
+          '</div>' +
+          '<canvas id="chart-exec-baht" height="160"></canvas>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chart-card">' +
+        '<div class="chart-title" style="font-size:13px;margin-bottom:12px">⚠️ Pending สูงสุดรายทีม</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' + barsHTML +
+          '<div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">รอดำเนินการทั้งหมด: <b style="color:var(--amber)">'+fmtN(total-reviewed)+'</b> tickets</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  setTimeout(function(){
+    const c = $('chart-exec-baht');
+    if(!c||!window.Chart) return;
+    if(c._chart) c._chart.destroy();
+    c._chart = new Chart(c, {
+      type:'doughnut',
+      data:{
+        labels:['Final ปรับ','ลดได้จาก Defend'],
+        datasets:[{data:[finalBaht, savedBaht],backgroundColor:['#ef4444','#10b981'],borderWidth:0}]
+      },
+      options:{
+        plugins:{legend:{position:'bottom',labels:{color:'#64748b',font:{size:10}}}},
+        cutout:'60%'
+      }
+    });
+  },100);
+}
+
+function linkify(text){
+  if(!text) return '—';
+  const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+  return String(text).replace(urlRegex, url =>
+    `<a href="${url}" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:underline;word-break:break-all">${url}</a>`
+  );
+}
+
+// ── Role helpers (case-insensitive, matches ENGINEER_ZONE etc) ──
+function isEngineerRole(role){
+  const r = (role||'').toUpperCase();
+  return ['ENGINEER','SITE SUP','ENGINEER_ZONE','ENGINEER ZONE'].includes(r);
+}
+function isFSORole(role){
+  const r = (role||'').toUpperCase().replace(/ /g,'_');
+  return r==='FSO_ZONE' || r==='FSO' || r.includes('FSO_ZONE');
+}
+function isFSOManagerRole(role){
+  const r = (role||'').toUpperCase().replace(/ /g,'_');
+  return r==='FSO_MANAGER' || r.includes('FSO_MANAGER');
+}
+function isManagerRole(role){
+  const r = (role||'').toUpperCase();
+  return ['MANAGER','BBTEC MANAGER','BBTEC_MANAGER','MANAGER NOR1','MANAGER NOR2',
+          'BBTEC MANAGER NOR1','BBTEC MANAGER NOR2','BBTEC_MANAGER_NOR1','BBTEC_MANAGER_NOR2'].includes(r)
+    || r.includes('MANAGER');
+}
+function canUseBulkSelect(role){
+  const r = (role||'').toUpperCase().replace(/ /g,'_');
+  return r==='BBTEC_MANAGER' || r==='FSO_MANAGER'
+    || r.includes('BBTEC_MANAGER') || r.includes('FSO_MANAGER');
+}
+
+// ── Modal ──
+function openTicket(ticket){
+  const role = currentUser?.role || '';
+  const step = String(ticket.STEP||'').trim();
+  const locked = String(ticket.LOCKED||'').toUpperCase()==='TRUE';
+  const defendCount = parseInt(ticket.DEFEND_COUNT||0);
+  // Read FSO decision — try multiple possible column name variants
+  const fsoDecision = (
+    ticket['FSO พิจารณา (ปรับ/ไม่ปรับ)'] ||
+    ticket['FSO พิจารณา'] ||
+    ticket['fso_decision'] || ''
+  ).trim();
+
+  $('modal-tid').textContent = `🎫 ${ticket.TICKETID}`;
+  // Load audit log async
+  loadAuditLog(ticket.TICKETID);
+
+  // Step progress
+  const spHTML = [1,2,3,4,5].map((s,i) => {
+    const n = parseInt(step)||0;
+    const cls = n>s?'done':n===s?'active':'';
+    const line = i<4 ? `<div class="sp-line ${n>s?'done':''}"></div>` : '';
+    const labels = {1:'Engineer',2:'FSO',3:'Defend',4:'Final',5:'Approve'};
+    return `<div class="sp-item"><div class="sp-circle ${cls}">${s}</div><div class="sp-label">${labels[s]}</div></div>${line}`;
+  }).join('');
+
+  let formHTML = '';
+
+  // Step 1 form (Engineer) — กรอกข้อมูล
+  if(isEngineerRole(role) && !locked && (step===''||step==='0'||step==='1')){
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 1 — Engineer กรอกข้อมูล</div>
+
+        <div class="form-row" style="margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:#f9a8d4;margin-bottom:4px;font-weight:600">🏷 Group Problem</div>
+            <select class="form-input" id="f-group" style="border-color:#f472b6">
+              <option value="">— เลือก Group Problem —</option>
+              ${buildGroupOptions(ticket['Group problem']||'')}
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#93c5fd;margin-bottom:4px;font-weight:600">🔍 Sub Problem</div>
+            <select class="form-input" id="f-sub" style="border-color:#3b82f6">
+              <option value="">— เลือก Sub Problem —</option>
+              ${buildSubOptions(ticket['Sub Problem']||'')}
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Accident (ถ้ามี)</div>
+          <input class="form-input" id="f-accident" placeholder="Accident" value="${ticket.Accident||''}"/>
+        </div>
+        <div style="margin-bottom:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:#1d4ed8;margin-bottom:6px;font-weight:600">🔗 แนบ LINK ชี้แจง (คอลัมน์ AH)</div>
+          <input class="form-input" id="f-evidence" placeholder="https://..." value="${ticket['แนบ LINK ชี้แจง']||ticket['แนบ LINK ชี้แจง (AH)']||''}"/>
+        </div>
+        <div style="margin-bottom:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:#15803d;margin-bottom:6px;font-weight:600">📝 Overdue Detail แนบLINK รูป (คอลัมน์ AG)</div>
+          <textarea class="form-textarea" id="f-overdue" style="margin-bottom:0">${(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'')}</textarea>
+        </div>
+        <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn-cancel" onclick="openDrillDown('${ticket.TICKETID}')" style="border-color:var(--accent);color:var(--accent)" title="ดู Queue งานจาก Google Sheet">🔍 Drill Down</button>
+          <button class="btn-submit" onclick="submitStep1('${ticket.TICKETID}')">ยืนยัน Step 1 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // Step 2 — Engineer เห็นผลการพิจารณา FSO + ตัดสินใจ Defend หรือ ยอมรับ
+  else if(isEngineerRole(role) && !locked && (step==='2' || step==='3')){
+    // Step=2 หมายความว่า FSO พิจารณาแล้ว (ปรับ)
+    // ถ้า fsoDecision ว่าง แสดงว่า column name ไม่ตรง แต่ step=2 = FSO ปรับแล้ว
+    const isNoPenalty = fsoDecision === 'ไม่ปรับ';
+    const canDefend = !isNoPenalty && defendCount < 2;
+    const nextRound = defendCount + 1;
+    // Show defend history badge if already used some rounds
+    const defendHistoryHTML = defendCount > 0 ? `
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+        ${[1,2].map(r=>`
+          <div style="padding:3px 10px;border-radius:10px;font-size:11px;
+            background:${r<=defendCount?'#dbeafe':'var(--bg3)'};
+            color:${r<=defendCount?'#1d4ed8':'var(--muted)'};
+            border:1px solid ${r<=defendCount?'#92400e':'var(--border)'}">
+            Defend ครั้งที่ ${r} ${r<=defendCount?'(ใช้แล้ว)':''}
+          </div>`).join('')}
+      </div>` : '';
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 2 — ผลการพิจารณาจาก FSO</div>
+        <div style="padding:14px;border-radius:10px;margin-bottom:12px;text-align:center;
+          background:${isNoPenalty?'#dcfce7':'#fee2e2'};
+          border:2px solid ${isNoPenalty?'#10b981':'#ef4444'}">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">ผลการพิจารณา FSO</div>
+          <div style="font-size:22px;font-weight:700;color:${isNoPenalty?'#6ee7b7':'#fca5a5'}">
+            ${isNoPenalty ? '🟢 ไม่ปรับ' : '🔴 ปรับ'}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">
+            FSO: <b style="color:var(--text)">${ticket['FSO approve (ลงชื่อ FSO)']||'—'}</b>
+            &nbsp;|&nbsp; วันที่: <b style="color:var(--text)">${ticket['วันที่ FSO อนุมัติ']||'—'}</b>
+          </div>
+          ${!isNoPenalty ? `<div style="font-size:11px;color:#fca5a5;margin-top:4px">เหลือสิทธิ์ Defend อีก ${2-defendCount} ครั้ง</div>` : ''}
+          ${defendHistoryHTML}
+        </div>
+        ${(ticket['Remark FSO']||ticket['remark_fso']||'') ? `
+        <div style="background:#1e2a3a;border:1px solid #3b5a7a;border-radius:8px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;color:#93c5fd;font-weight:600;margin-bottom:6px">💬 Remark จาก FSO</div>
+          <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${ticket['Remark FSO']||ticket['remark_fso']||''}</div>
+        </div>` : ''}
+        ${isNoPenalty ? 
+          `<div style="text-align:center;color:#15803d;padding:12px;background:#dcfce7;border-radius:8px">
+            ✅ FSO ตัดสิน ไม่ปรับ — รอ Manager Approve
+          </div>` :
+          canDefend ? `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button class="btn-submit" style="background:#1e3a5f;border:2px solid #3b82f6;padding:16px;border-radius:10px;font-size:14px;cursor:pointer;font-weight:600"
+              onclick="showDefendForm('${ticket.TICKETID}',${defendCount})">
+              ⚔️ ขอ Defend ครั้งที่ ${nextRound}/2
+            </button>
+            <button class="btn-submit" style="background:#fee2e2;border:2px solid #dc2626;padding:16px;border-radius:10px;font-size:14px;cursor:pointer"
+              onclick="acceptPenalty('${ticket.TICKETID}')">
+              ✋ ยอมรับค่าปรับ
+            </button>
+          </div>` :
+          `<div style="text-align:center;color:#fca5a5;padding:14px;background:#3d1a1a;border-radius:8px;font-weight:500">
+            ❌ หมดสิทธิ์ Defend แล้ว (ครบ 2 ครั้ง)<br>
+            <small style="color:var(--muted)">รอ Manager Approve</small>
+          </div>`
+        }
+      </div>`;
+  }
+
+  // Step 2 form (FSO)
+  else if(isFSORole(role) && !locked && step==='1'){
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 2 — FSO พิจารณา</div>
+        <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
+          <!-- FSO KEY INFO — highlighted for decision making -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">Group Problem</div>
+              <div style="font-weight:600;color:#e2e8f0">${ticket['Group problem']||'—'}</div>
+            </div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">Sub Problem ⭐</div>
+              <div style="font-weight:600;color:#7dd3fc">${ticket['Sub Problem']||'—'}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">TARGETFINISH</div>
+              <div style="font-weight:500;color:#e2e8f0">${ticket.TARGETFINISH||'—'}</div>
+            </div>
+            <div style="background:#1a2e4a;border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:3px">ACT_RESTORATIONDATE ⭐</div>
+              <div style="font-weight:600;color:#fb923c">${ticket.ACT_RESTORATIONDATE||ticket.ACT_RESTORATIONDATE||'—'}</div>
+            </div>
+          </div>
+          <div style="background:#1e3520;border:1px solid #2d5a3d;border-radius:8px;padding:10px;margin-bottom:4px">
+            <div style="font-size:10px;color:#6ee7b7;margin-bottom:4px">📎 Overdue Detail + Link รูป (AG) ⭐</div>
+            <div style="font-size:12px;color:#e2e8f0">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
+          </div>
+          <div style="background:#1a2640;border:1px solid #253550;border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:#93c5fd;margin-bottom:4px">🔗 แนบ LINK ชี้แจง (AH) ⭐</div>
+            <div style="font-size:12px;color:#93c5fd">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
+          </div>
+        </div>
+        <div class="decision-row">
+          <button class="dec-btn" id="dec-penalty" onclick="selectDecision('ปรับ')">🔴 ปรับ</button>
+          <button class="dec-btn" id="dec-no-penalty" onclick="selectDecision('ไม่ปรับ')">🟢 ไม่ปรับ</button>
+        </div>
+        <input type="hidden" id="f-fso-decision" value=""/>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Remark FSO</div>
+          <textarea class="form-textarea" id="f-remark" placeholder="เหตุผลการตัดสิน..."></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn-submit" id="btn-fso-submit" disabled onclick="submitStep2('${ticket.TICKETID}')">ยืนยัน Step 2 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // Step 3 Defend review (FSO)
+  else if(isFSORole(role) && !locked && step==='3'){
+    // Use normalized _defend_reason from backend, fallback to dynamic search
+    let defendReason = ticket['_defend_reason'] || '';
+    if(!defendReason){
+      for(const [k,v] of Object.entries(ticket)){
+        if(k.includes('Defend') && (k.includes('สมควร') || k.includes('BBTEC')) && v){
+          defendReason = v; break;
+        }
+      }
+    }
+    if(!defendReason) defendReason = '—';
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 3 — FSO พิจารณา Defend ครั้งที่ ${defendCount}/2</div>
+        <div style="margin-bottom:14px;padding:14px;background:#1e2d1a;border:2px solid #4a7c59;border-radius:10px">
+          <div style="font-size:11px;color:#6ee7b7;font-weight:600;margin-bottom:8px">⚔️ เหตุผลที่ Engineer ขอ Defend</div>
+          <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${defendReason}</div>
+        </div>
+        <div class="decision-row">
+          <button class="dec-btn" id="dec-penalty" onclick="selectDecision('ปรับ')">🔴 ยังคงปรับ</button>
+          <button class="dec-btn" id="dec-no-penalty" onclick="selectDecision('ไม่ปรับ')">🟢 ยอมรับ Defend</button>
+        </div>
+        <input type="hidden" id="f-fso-decision" value=""/>
+        <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Remark</div>
+          <textarea class="form-textarea" id="f-remark" placeholder="เหตุผล..."></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn-submit" id="btn-fso-submit" disabled onclick="submitDefendReview('${ticket.TICKETID}')">ยืนยันผล Defend 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // Step 5 Manager Approve + Manager Defend option
+  else if(isManagerRole(role) && step==='4'){
+    const _dc = parseInt(String(ticket.DEFEND_COUNT||'0').replace(/\/.*/,'')) || 0;
+    const canMgrDefend = String(ticket.FINAL_RESULT||'').trim()==='ปรับ'
+      && _dc >= 2
+      && !String(ticket.MANAGER_DEFEND||'').trim()
+      && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined';
+
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">STEP 5 — Manager Review</div>
+        <div style="padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div>
+              <div style="font-size:11px;color:var(--muted)">Final Result</div>
+              <div style="font-size:18px;font-weight:600;margin-top:2px">${resultBadge(ticket.FINAL_RESULT)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--muted)">ค่าปรับ</div>
+              <div style="font-size:18px;font-weight:700;color:var(--red)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">Defend ไปแล้ว: <b style="color:var(--text)">${ticket.DEFEND_COUNT||0}/2 ครั้ง</b></div>
+        </div>
+        ${canMgrDefend ? `
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:4px">⚔️ Manager Defend พิเศษ (1 ครั้ง)</div>
+          <div style="font-size:11px;color:#78350f;margin-bottom:8px">Defend ครบ 2 ครั้งแล้ว หากมีข้อมูลเพิ่ม สามารถ Defend ได้อีก 1 ครั้ง — FSO Manager ตัดสินขั้นสุดท้าย</div>
+          <textarea id="f-mgr-defend-reason" placeholder="กรอกเหตุผลการ Defend ของ Manager..." style="width:100%;min-height:70px;padding:8px;border-radius:6px;border:1px solid #fcd34d;background:#fffbeb;color:#1a1917;font-size:12px;font-family:var(--font);resize:vertical;box-sizing:border-box"></textarea>
+        </div>` : ''}
+        <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          ${canMgrDefend ? `<button class="btn-submit" style="background:#f59e0b;flex:1" onclick="submitManagerDefend('${ticket.TICKETID}')">⚔️ Manager Defend</button>` : ''}
+          ${String(ticket.MANAGER_DEFEND||'').trim() ? `<button onclick="resetManagerDefend('${ticket.TICKETID}')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:11px;cursor:pointer">🗑 ล้าง Manager Defend</button>` : ''}
+          <button class="btn-submit btn-sm-green" style="flex:1" onclick="submitApprove('${ticket.TICKETID}')">✓ อนุมัติ (Approve) 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // FSO Manager Final — step 5 (ทั้ง approve ปกติ และ Manager Defend)
+  else if(isFSOManagerRole(role) && step==='5'){
+    const hasMgrDefend = String(ticket.MANAGER_DEFEND||'').trim() !== '';
+    formHTML = `
+      <div class="form-section">
+        <div class="form-section-title">✅ FSO Manager — Final Approve</div>
+        <div style="padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:11px;color:var(--muted)">BBTEC Manager Action</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-top:2px">${ticket['BBTEC Manager Action']||'อนุมัติ'}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--muted)">ค่าปรับ</div>
+              <div style="font-size:18px;font-weight:700;color:var(--red)">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div>
+            </div>
+          </div>
+        </div>
+        ${hasMgrDefend ? `
+        <div style="padding:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin-bottom:14px">
+          <div style="font-size:11px;color:#78350f;font-weight:600;margin-bottom:4px">⚔️ เหตุผล Manager Defend:</div>
+          <div style="font-size:12px;color:#1a1917">${ticket.MANAGER_DEFEND||'—'}</div>
+        </div>` : ''}
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">ผลการพิจารณาขั้นสุดท้าย:</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button class="dec-btn" id="dec-mgr-penalty" onclick="selectMgrDecision('ปรับ')" style="padding:14px;font-size:13px">🔴 ปรับ</button>
+            <button class="dec-btn" id="dec-mgr-no-penalty" onclick="selectMgrDecision('ไม่ปรับ')" style="padding:14px;font-size:13px">🟢 ไม่ปรับ</button>
+          </div>
+          <input type="hidden" id="f-mgr-fso-decision" value=""/>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">หมายเหตุ FSO Manager</div>
+          <textarea id="f-mgr-remark" placeholder="เหตุผลการตัดสิน..." style="width:100%;min-height:60px;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;font-family:var(--font);resize:vertical;box-sizing:border-box"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn-submit" id="btn-mgr-fso-submit" disabled onclick="submitFSOManagerFinal('${ticket.TICKETID}')">✅ FSO Manager Final 🔒</button>
+        </div>
+      </div>`;
+  }
+
+  // Read only
+  else {
+    const lockLabel = locked ? '<span class="badge badge-lock">🔒 Locked</span>' : '';
+    formHTML = `<div style="text-align:center;color:var(--muted);padding:16px">${lockLabel} ไม่มีการดำเนินการที่รอบทบาทของคุณ</div>`;
+  }
+
+  $('modal-body').innerHTML = `
+    <div class="step-progress">${spHTML}</div>
+    <div class="detail-grid">
+      <div class="detail-item"><div class="detail-label">TICKET ID</div><div class="detail-val" style="font-family:var(--mono);color:var(--accent2)">${ticket.TICKETID||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">EXTERNALSYSTEM_TICKETID</div><div class="detail-val" style="font-family:var(--mono)">${ticket.EXTERNALSYSTEM_TICKETID||'—'}</div></div>
+      <div class="detail-item" style="grid-column:span 2"><div class="detail-label">Subject</div><div class="detail-val">${ticket.SUBJECT||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">Province / Region</div><div class="detail-val">${ticket.TrackB_Region||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">TRUESEVERITY / URGENCY</div><div class="detail-val">${ticket.TRUESEVERITY_DESC||'—'} / ${ticket.TRUEURGENCY||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">CREATIONDATE</div><div class="detail-val">${ticket.CREATIONDATE||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">TARGETFINISH</div><div class="detail-val">${ticket.TARGETFINISH||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">ACT_RESTORATIONDATE (จริง)</div><div class="detail-val" style="color:var(--amber)">${ticket.ACT_RESTORATIONDATE||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">ค่าปรับ (บาท)</div><div class="detail-val" style="color:var(--red);font-size:18px;font-weight:600">${fmtBaht(ticket.PENALTYBAHT_TRACKB)}</div></div>
+      <div class="detail-item"><div class="detail-label">PENALTY_FLAG / PENALTYHOUR</div><div class="detail-val">${ticket.PENALTY_FLAG||'—'} / ${ticket.PENALTYHOUR_TRACKB||'—'} hr</div></div>
+      <div class="detail-item"><div class="detail-label">Owner Group (CONTRACTTICKET)</div><div class="detail-val">${ticket['CONTRACTTICKET_TRACKB (groups)']||ticket.CONTRACTTICKET_TRACKB||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">Group Problem (กรอกแล้ว)</div><div class="detail-val">${ticket['Group problem']||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">FSO ตัดสิน</div><div class="detail-val">${resultBadge(fsoDecision)}</div></div>
+      <div class="detail-item" style="grid-column:span 2">
+        <div class="detail-label">แนบ LINK ชี้แจง (AH)</div>
+        <div class="detail-val" style="font-size:12px">${linkify(ticket['แนบ LINK ชี้แจง']||'—')}</div>
+      </div>
+      <div class="detail-item" style="grid-column:span 2">
+        <div class="detail-label">Overdue Detail + Link รูป (AG)</div>
+        <div class="detail-val" style="font-size:12px">${linkify(ticket['Overdue Detail แนบLINK รูป']||ticket['Overdue Detail']||'—')}</div>
+      </div>
+      ${(ticket['Remark FSO']||'').trim() ? `
+      <div class="detail-item" style="grid-column:span 2;background:#1e2a3a;border:1px solid #3b5a7a">
+        <div class="detail-label" style="color:#93c5fd">💬 Remark จาก FSO (Step 2)</div>
+        <div class="detail-val" style="color:#e2e8f0;font-size:13px">${ticket['Remark FSO']||''}</div>
+      </div>` : ''}
+    </div>
+    ${formHTML}
+    <div id="audit-timeline" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px"
+           onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        📋 ประวัติการดำเนินการ <span style="font-size:10px">(คลิกเพื่อ ขยาย/ย่อ)</span>
+      </div>
+      <div id="audit-list" style="font-size:11px;color:var(--muted);display:none">กำลังโหลด...</div>
+    </div>
+  `;
+  $('modal-overlay').classList.add('open');
+}
+
+function forceCloseModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function closeModal(e){
+  if(e && e.target !== $('modal-overlay')) return;
+  $('modal-overlay').classList.remove('open');
+}
+
+function selectDecision(val){
+  $('f-fso-decision').value = val;
+  $('dec-penalty').className = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
+  $('dec-no-penalty').className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
+  const btn = $('btn-fso-submit');
+  if(btn) btn.disabled = false;
+}
+
+// ── Defend inline form ──
+function showDefendForm(tid, currentCount){
+  const body = $('modal-body');
+  // Find the form section and replace with defend form
+  const formSection = body.querySelector('.form-section');
+  if(formSection){
+    formSection.innerHTML = `
+      <div class="form-section-title">⚔️ STEP 3 — ขอ Defend ครั้งที่ ${currentCount+1}/2</div>
+      <div class="defend-counter" style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted)">ใช้ไปแล้ว</div>
+        <div class="defend-dots">
+          ${[0,1].map(i=>`<div class="defend-dot ${i<currentCount?'used':''}"></div>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--amber)">${currentCount}/2 ครั้ง — เหลือ ${2-currentCount} ครั้ง</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">เหตุผลที่ไม่สมควรถูกปรับ</div>
+        <textarea class="form-textarea" id="f-defend-reason" placeholder="อธิบายเหตุผลโดยละเอียด..." style="min-height:100px"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn-submit" onclick="submitDefendRequest('${tid}')">ส่งคำขอ Defend ครั้งที่ ${currentCount+1} ⚔️</button>
+      </div>`;
+  }
+}
+
+function acceptPenalty(tid){
+  if(!confirm('ยืนยันการยอมรับค่าปรับ? ข้อมูลจะถูก Lock')) return;
+  // Move to step 4 final=ปรับ by calling a special endpoint
+  apiPost(`/api/ticket/${tid}/accept`, {});
+}
+
+// ── Submit handlers ──
+async function submitStep1(tid){
+  const body = {
+    group_problem:  $('f-group')?.value||'',
+    sub_problem:    $('f-sub')?.value||'',
+    accident:       $('f-accident')?.value||'',
+    overdue_detail: $('f-overdue')?.value||'',
+    link_evidence:  $('f-evidence')?.value||'',
+  };
+  // Optimistic: update UI & close modal immediately
+  optimisticUpdate(tid, {
+    STEP: '1',
+    'Group problem': body.group_problem,
+    'Sub Problem':   body.sub_problem,
+    'Overdue Detail แนบLINK รูป': body.overdue_detail,
+    'แนบ LINK ชี้แจง': body.link_evidence,
+  });
+  closeModal();
+  showToast('บันทึก Step 1 สำเร็จ ✓', 'success');
+  // Sync to server in background
+  apiPostSilent(`/api/ticket/${tid}/step1`, body);
+}
+
+async function submitStep2(tid){
+  const decision = $('f-fso-decision')?.value||'';
+  if(!decision){ showToast('กรุณาเลือก ปรับ หรือ ไม่ปรับ','error'); return; }
+  const body = { fso_decision: decision, remark: $('f-remark')?.value||'' };
+  optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision, FINAL_RESULT: decision === 'ปรับ' ? 'ปรับ' : '' });
+  closeModal();
+  showToast('บันทึก Step 2 สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/step2`, body);
+}
+
+async function submitDefendRequest(tid){
+  const reason = $('f-defend-reason')?.value||'';
+  if(!reason){ showToast('กรุณากรอกเหตุผล','error'); return; }
+  // Find current defend count to show correct round
+  const cur = allTickets.find(t => String(t.TICKETID) === String(tid));
+  const nextCount = String(parseInt(cur?.DEFEND_COUNT||0) + 1);
+  optimisticUpdate(tid, { STEP:'3', DEFEND_COUNT: nextCount });
+  closeModal(); showToast('ส่ง Defend สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/defend/request`, { defend_reason: reason });
+}
+
+async function submitDefendReview(tid){
+  const decision = $('f-fso-decision')?.value||'';
+  if(!decision){ showToast('กรุณาเลือกผล','error'); return; }
+  const body = { decision, remark: $('f-remark')?.value||'' };
+  optimisticUpdate(tid, { STEP:'3', FINAL_RESULT: decision });
+  closeModal(); showToast('บันทึกผล Defend สำเร็จ ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/defend/review`, body);
+}
+
+async function resetManagerDefend(tid){
+  if(!confirm('ล้าง Manager Defend สำหรับ Ticket นี้?\n(ใช้เพื่อทดสอบหรือแก้ไขข้อมูลผิด)')) return;
+  try {
+    const res = await fetch(`${API}/api/ticket/${tid}/reset-manager-defend`, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'}
+    });
+    const data = await res.json();
+    if(data.success){
+      optimisticUpdate(tid, { MANAGER_DEFEND:'', 'Manager Defend Reason':'' });
+      closeModal();
+      showToast('ล้าง Manager Defend สำเร็จ ✓','success');
+    } else {
+      showToast(data.error||'เกิดข้อผิดพลาด','error');
+    }
+  } catch(e){ showToast('ไม่สามารถเชื่อมต่อ Server','error'); }
+}
+
+async function resetManagerDefend(tid){
+  if(!confirm('ล้าง Manager Defend สำหรับ Ticket นี้?\n(ใช้เพื่อทดสอบหรือแก้ไขข้อมูลผิด)')) return;
+  try {
+    const res = await fetch(`${API}/api/ticket/${tid}/reset-manager-defend`, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'}
+    });
+    const data = await res.json();
+    if(data.success){
+      optimisticUpdate(tid, { MANAGER_DEFEND:'', 'Manager Defend Reason':'' });
+      closeModal();
+      showToast('ล้าง Manager Defend สำเร็จ ✓','success');
+    } else {
+      showToast(data.error||'เกิดข้อผิดพลาด','error');
+    }
+  } catch(e){ showToast('ไม่สามารถเชื่อมต่อ Server','error'); }
+}
+
+async function submitApprove(tid){
+  optimisticUpdate(tid, { STEP:'5', MANAGER_DEFEND:'' });
+  closeModal(); showToast('BBTEC Manager อนุมัติแล้ว — รอ FSO Manager ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/approve`, {});
+}
+
+function selectMgrDecision(val){
+  document.querySelectorAll('[id="f-mgr-fso-decision"]').forEach(el => el.value = val);
+  document.querySelectorAll('[id="dec-mgr-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ปรับ'?' selected-penalty':''));
+  document.querySelectorAll('[id="dec-mgr-no-penalty"]').forEach(el =>
+    el.className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':''));
+  document.querySelectorAll('[id="btn-mgr-fso-submit"]').forEach(el => {
+    el.disabled = false;
+    el.style.opacity = '1';
+  });
+}
+
+async function submitManagerDefend(tid){
+  const reason = document.getElementById('f-mgr-defend-reason')?.value?.trim()||'';
+  if(!reason){ showToast('กรุณากรอกเหตุผลการ Defend','error'); return; }
+  optimisticUpdate(tid, { STEP:'5', MANAGER_DEFEND: reason });
+  closeModal();
+  showToast('ส่ง Manager Defend แล้ว — รอ FSO Manager ตัดสินขั้นสุดท้าย ✓','success');
+  apiPostSilent(`/api/ticket/${tid}/manager-defend/request`, { reason });
+}
+
+async function submitManagerDefendReview(tid){
+  const decision = [...document.querySelectorAll('[id="f-mgr-fso-decision"]')].pop()?.value||'';
+  if(!decision){ showToast('กรุณาเลือกผลการพิจารณา','error'); return; }
+  const remark = document.getElementById('f-mgr-remark')?.value||'';
+  optimisticUpdate(tid, { STEP:'6', FINAL_RESULT: decision, LOCKED:'TRUE' });
+  closeModal();
+  showToast('FSO Manager ตัดสิน: ' + decision + ' 🔒 — กระบวนการเสร็จสิ้น','success');
+  apiPostSilent(`/api/ticket/${tid}/manager-defend/review`, { decision, remark });
+}
+
+async function submitFSOManagerFinal(tid){
+  const decision = [...document.querySelectorAll('[id="f-mgr-fso-decision"]')].pop()?.value||'';
+  if(!decision){ showToast('กรุณาเลือกผลการพิจารณา','error'); return; }
+  const remark = document.getElementById('f-mgr-remark')?.value||'';
+  optimisticUpdate(tid, { STEP:'6', FINAL_RESULT: decision, LOCKED:'TRUE' });
+  closeModal();
+  showToast('FSO Manager Final: ' + decision + ' 🔒 — กระบวนการเสร็จสิ้น','success');
+  apiPostSilent(`/api/ticket/${tid}/fso-manager-approve`, { decision, remark });
+}
+
+// ── Optimistic UI helpers ──
+const _optimisticLocks = {}; // tid → timestamp of last optimistic patch
+
+function optimisticUpdate(tid, patch){
+  const idx = allTickets.findIndex(t => String(t.TICKETID) === String(tid));
+  if(idx !== -1){
+    allTickets[idx] = {...allTickets[idx], ...patch};
+    allTicketsRaw = allTickets;
+    _optimisticLocks[tid] = Date.now();
+  }
+  renderTicketTable(getFilteredTickets());
+  renderTicketsKPI(getFilteredTickets());
+  renderPivotTable(allTicketsRaw);
+  // Re-render my-tickets immediately so completed ticket disappears
+  if(document.getElementById('page-my-tickets')?.style.display !== 'none'){
+    renderMyTickets();
+  }
+}
+
+// Merge server data but respect optimistic locks
+function mergeServerTickets(serverTickets){
+  const now = Date.now();
+  const LOCK_MS = 8000; // 8 seconds lock after optimistic update
+  return serverTickets.map(t => {
+    const tid = String(t.TICKETID);
+    const lockTs = _optimisticLocks[tid];
+    if(lockTs && (now - lockTs) < LOCK_MS){
+      // Still locked — keep our optimistic values for STEP and FSO decision
+      const local = allTickets.find(l => String(l.TICKETID) === tid);
+      if(local) return {...t, STEP: local.STEP, 'FSO พิจารณา (ปรับ/ไม่ปรับ)': local['FSO พิจารณา (ปรับ/ไม่ปรับ)'], FINAL_RESULT: local.FINAL_RESULT, DEFEND_COUNT: local.DEFEND_COUNT};
+    } else {
+      delete _optimisticLocks[tid]; // unlock expired
+    }
+    return t;
+  });
+}
+
+// Map endpoint → which fields change so we can patch locally
+function getPatchFromUrl(url, body){
+  if(url.includes('/step1'))    return { STEP:'1', 'Group problem': body.group_problem||'', 'Sub Problem': body.sub_problem||'', 'Overdue Detail แนบLINK รูป': body.overdue_detail||'', 'แนบ LINK ชี้แจง': body.link_evidence||'' };
+  if(url.includes('/step2'))    return { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': body.fso_decision||'', FINAL_RESULT: body.fso_decision||'' };
+  if(url.includes('/defend/request')) return { STEP:'3' };
+  if(url.includes('/defend/review'))  return { STEP:'3', FINAL_RESULT: body.decision||'' };
+  if(url.includes('/accept'))   return { STEP:'4', FINAL_RESULT:'ปรับ' };
+  if(url.includes('/approve'))  return { STEP:'5' };
+  if(url.includes('/manager-defend/request')) return { STEP:'5' };
+  if(url.includes('/manager-defend/review'))  return { STEP:'6', LOCKED:'TRUE' };
+  if(url.includes('/fso-manager-approve'))    return { STEP:'6', LOCKED:'TRUE' };
+  return {};
+}
+
+// ── Safe loadTickets — respects optimistic locks ──
+function hasActiveLocks(){
+  const now = Date.now();
+  return Object.values(_optimisticLocks).some(ts => (now - ts) < 8000);
+}
+
+function safeLoadTickets(){
+  if(hasActiveLocks()){
+    return new Promise(resolve => setTimeout(()=> safeLoadTickets().then(resolve), 1000));
+  }
+  return loadTickets().catch(()=>{});
+}
+
+function safeRefresh(){
+  safeLoadTickets().then(()=>{
+    // Re-render my-tickets page if currently visible
+    if(document.getElementById('page-my-tickets')?.style.display !== 'none'){
+      renderMyTickets();
+    }
+  });
+  loadDashboard().catch(()=>{});
+}
+async function apiPostSilent(url, body){
+  let delay = 2000;
+  for(let attempt=0; attempt<4; attempt++){
+    try {
+      const res = await fetch(API+url,{
+        method:'POST', credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(attempt < 3){
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 20000);
+          continue;
+        }
+        showToast('⚠️ บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
+        return;
+      }
+      if(data.success){
+        setTimeout(safeRefresh, 5000);
+      } else if(data.error){
+        showToast(`⚠️ ${data.error}`, 'error');
+      }
+      return;
+    } catch(e){ await new Promise(r => setTimeout(r, delay)); delay = Math.min(delay*2, 20000); }
+  }
+}
+
+async function apiPost(url, body){
+  try {
+    const tidMatch = url.match(/\/api\/ticket\/([^\/]+)\//);
+    const tid = tidMatch ? tidMatch[1] : null;
+
+    // Retry up to 4 times on 429
+    let data, delay = 2000;
+    for(let attempt=0; attempt<4; attempt++){
+      const res = await fetch(API+url,{
+        method:'POST', credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      data = await res.json();
+      if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
+        if(attempt < 3){
+          showToast(`⏳ API เกิน quota รอ ${Math.round(delay/1000)}s...`, 'info');
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 20000);
+          continue;
+        }
+      }
+      break;
+    }
+
+    if(data.success){
+      showToast(data.message||'สำเร็จ','success');
+      if(tid){
+        const patch = getPatchFromUrl(url, body);
+        optimisticUpdate(tid, patch);
+      }
+      closeModal();
+      setTimeout(safeRefresh, 800);
+    } else {
+      showToast(data.error||'เกิดข้อผิดพลาด','error');
+    }
+  } catch(e){
+    showToast('ไม่สามารถเชื่อมต่อ Server','error');
+  }
+}
+
+// ── Auto-check session on load ──
+// ── Export Excel ──
+function exportExcel(){
+  const filtered = getFilteredTickets();
+  if(!filtered.length){ showToast('ไม่มีข้อมูลที่จะ export','error'); return; }
+  const headers = [
+    'TICKETID','SUBJECT','Province','ค่าปรับ (บาท)',
+    'FSO ตัดสิน','Step','Final','Owner',
+    'Group Problem','Sub Problem',
+    'Overdue Detail (AG)','LINK ชี้แจง (AH)',
+    // Remark ทุกขั้นตอน
+    'Remark Engineer (Step1)',
+    'Remark FSO (Step2)',
+    'เหตุผล Defend ครั้งที่ 1 (Engineer)',
+    'Remark FSO หลัง Defend ครั้งที่ 1',
+    'เหตุผล Defend ครั้งที่ 2 (Engineer)',
+    'Remark FSO หลัง Defend ครั้งที่ 2',
+    'เหตุผล Manager Defend',
+    'Remark FSO Manager (Final)',
+    'Remark FSO (รวม)',
+    'Last Updated','Updated By'
+  ];
+  const dataKeys = [
+    'TICKETID','SUBJECT','TrackB_Region','PENALTYBAHT_TRACKB',
+    'FSO พิจารณา (ปรับ/ไม่ปรับ)','STEP','FINAL_RESULT','Owner',
+    'Group problem','Sub Problem',
+    'Overdue Detail แนบLINK รูป','แนบ LINK ชี้แจง',
+    'Remark Step1 (Engineer)',
+    'Remark FSO (Step2)',
+    'BBTEC Defend\nไม่สมควรปรับ',
+    'Remark Defend1 (FSO)',
+    'BBTEC Defend2\nไม่สมควรปรับ',
+    'Remark Defend2 (FSO)',
+    'Manager Defend Reason',
+    'Remark FSO Manager (Final)',
+    'Remark FSO',
+    'LAST_UPDATED','UPDATED_BY'
+  ];
+  const ws_data = [headers, ...filtered.map(t => dataKeys.map(k => t[k]||''))];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  const colWidths = {'Overdue Detail (AG)':50,'LINK ชี้แจง (AH)':45,'เหตุผล Defend ครั้งที่ 1 (Engineer)':40,'Remark FSO หลัง Defend ครั้งที่ 1':40,'เหตุผล Defend ครั้งที่ 2 (Engineer)':40,'Remark FSO หลัง Defend ครั้งที่ 2':40,'เหตุผล Manager Defend':40,'Remark FSO Manager (Final)':40};
+  ws['!cols'] = headers.map(h=>({wch: colWidths[h] || Math.max(h.length+2,15)}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
+  const date = new Date().toLocaleDateString('th-TH').replace(/\//g,'-');
+  XLSX.writeFile(wb, `SmartDefense_${date}.xlsx`);
+  showToast(`Export ${filtered.length} tickets สำเร็จ`,'success');
+}
+
+// ── Checkbox & Bulk Approve ──
+function toggleSelectAll(cb){
+  document.querySelectorAll('.ticket-cb').forEach(c=>c.checked=cb.checked);
+  updateBulkBtn();
+}
+function updateBulkBtn(){
+  const checked = document.querySelectorAll('.ticket-cb:checked').length;
+  const btn = $('btn-bulk-approve');
+  const cnt = $('selected-count');
+  if(btn){ btn.style.display = checked>0 ? 'inline-block' : 'none'; }
+  if(cnt){ cnt.textContent = checked; }
+  const cbAll = $('cb-all');
+  const cbHead = $('cb-head');
+  const all = document.querySelectorAll('.ticket-cb').length;
+  if(cbAll) cbAll.indeterminate = checked>0 && checked<all;
+  if(cbHead) cbHead.indeterminate = checked>0 && checked<all;
+}
+async function doBulkApprove(){
+  const ids = [...document.querySelectorAll('.ticket-cb:checked')].map(c=>c.dataset.id);
+  if(!ids.length) return;
+  if(!confirm(`Approve ${ids.length} tickets?`)) return;
+  try {
+    const res = await fetch(`${API}/api/tickets/bulk-approve`,{
+      method:'POST',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ticket_ids:ids})
+    });
+    const d = await res.json();
+    if(d.success){
+      showToast(`Approve สำเร็จ ${d.approved} tickets`,'success');
+      safeRefresh();
+    } else showToast(d.error||'error','error');
+  } catch(e){ showToast('ไม่สามารถเชื่อมต่อ','error'); }
+}
+
+// ── Audit Timeline ──
+async function loadAuditLog(ticketid){
+  const el = $('audit-list');
+  if(!el) return;
+  try {
+    const res = await fetch(`${API}/api/ticket/${ticketid}/audit`,{credentials:'include'});
+    if(!res.ok){ el.innerHTML = '<span style="color:var(--muted)">ยังไม่มีประวัติ</span>'; return; }
+    const d = await res.json();
+    if(!d.logs||!d.logs.length){
+      el.innerHTML = '<span style="color:var(--muted)">ยังไม่มีประวัติ</span>'; return;
+    }
+    const actionLabel = {
+      'STEP1_SUBMIT':'📝 Engineer กรอก Step 1',
+      'FSO_DECISION':'🔵 FSO ตัดสิน',
+      'DEFEND_REQUEST':'⚔️ ขอ Defend',
+      'DEFEND_REVIEW':'🔄 FSO พิจารณา Defend',
+      'ACCEPT_PENALTY':'✋ ยอมรับค่าปรับ',
+      'MANAGER_APPROVE':'✅ Manager Approve',
+      'BULK_APPROVE':'✅ Bulk Approve',
+    };
+    el.innerHTML = d.logs.map(l=>`
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <div style="flex-shrink:0;width:4px;background:var(--accent);border-radius:2px"></div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+            <span style="font-weight:500;color:var(--text)">${actionLabel[l.action]||l.action}</span>
+            <span style="color:var(--muted);font-size:10px">${l.timestamp}</span>
+          </div>
+          <div style="color:var(--muted)">${l.name||l.user} (${l.role})</div>
+          ${l.detail?`<div style="color:var(--text);margin-top:2px;font-size:11px">${l.detail}</div>`:''}
+          ${l.step_to?`<div style="margin-top:2px"><span class="badge badge-${l.step_to}">${'Step '+l.step_to}</span></div>`:''}
+        </div>
+      </div>`).join('');
+  } catch(e){
+    if(el) el.innerHTML = '<span style="color:var(--muted)">โหลดไม่สำเร็จ</span>';
+  }
+}
+
+// ── Filter by owner group (pivot click) ──
+function filterByOwnerGroup(grp){
+  showPage('tickets');
+  const pSel = $('filter-province');
+  if(pSel && !pSel.disabled){
+    // Find matching option or add temporary
+    let found = false;
+    for(let o of pSel.options){ if(o.value===grp){pSel.value=grp;found=true;break;} }
+    if(!found){
+      const o = document.createElement('option');
+      o.value=grp; o.textContent=grp.replace('TRUE-TH-BBT-','').replace('-NOP','');
+      pSel.appendChild(o); pSel.value=grp;
+    }
+  }
+  filterTickets();
+}
+
+// ── Top 5 Pending ──
+function renderTop5(){
+  const el = $('top5-bar');
+  if(!el||!allTicketsRaw.length) return;
+  const pending = allTicketsRaw
+    .filter(t=>!t.FINAL_RESULT&&(!t.STEP||t.STEP==='0'||t.STEP==='1'||t.STEP==='2'))
+    .sort((a,b)=>(parseFloat(String(b.PENALTYBAHT_TRACKB||0).replace(/,/g,''))||0)
+               -(parseFloat(String(a.PENALTYBAHT_TRACKB||0).replace(/,/g,''))||0))
+    .slice(0,5);
+  if(!pending.length){ el.style.display='none'; return; }
+  const fmtM = n=>{const v=Number(n||0);return v>=1000000?(v/1000000).toFixed(1)+'M':Number(v).toLocaleString('th-TH');};
+  el.innerHTML = pending.map(t=>`
+    <div style="background:#fee2e2;border:1px solid #dc2626;border-radius:8px;padding:8px 10px;cursor:pointer"
+         onclick='openTicket(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
+      <div style="font-size:9px;color:#991b1b;margin-bottom:2px">🔴 รอดำเนินการ</div>
+      <div style="font-size:16px;font-weight:600;color:#ef4444">${fmtM(t.PENALTYBAHT_TRACKB)}</div>
+      <div style="font-size:10px;color:#991b1b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.TICKETID||'').substring(0,16)}</div>
+      <div style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.SUBJECT||'').substring(0,28)}</div>
+    </div>`).join('');
+}
+
+// ── Mobile nav update ──
+function updateMobileNav(page){
+  document.querySelectorAll('.mobile-nav-item').forEach(n=>{
+    n.classList.toggle('active', n.dataset.mpage===page);
+  });
+}
+
+
+// ── Group / Sub Problem dropdown options ──
+const GROUP_PROBLEM_OPTIONS = [
+  '1) Permission, Site Access',
+  '2) Accident (อุบัติเหตุ)',
+  '3) Diaster (ภัยพิบัติ)',
+  '4) Espionage,Stolen (การจารกรรม ถูกขโมย)',
+  '5) 3rd Party',
+  '6) Spare Part issue (ปัญหาอะไหล่)',
+  '7) WL Over Dimensioning',
+  '8) Others'
+];
+const SUB_PROBLEM_OPTIONS = [
+  '1.1) เจ้าของพื้นที่ไม่ให้เข้า',
+  '1.2) การไฟฟ้าไม่ให้เข้าพื้นที่',
+  '1.3) Renovate สถานที่',
+  '1.4) เข้าทำงานลำบาก',
+  '1.5) 3 จังหวัดภาคใต้, การสู้รบ',
+  '1.6) ประท้วง, จารจล',
+  '1.7) ไม่ปลอดภัยจากสัตว์, ต้นไม้สูง',
+  '1.8) อบรมปลอดภัยก่อน',
+  '2.1) รถชน, รถชนเสาไฟฟ้า',
+  '2.2) เสาไฟฟ้าล้ม',
+  '2.3) ต้นไม้ล้ม',
+  '3.1) ไฟไหม้ต้นไม้, สายสื่อสาร',
+  '3.2) น้ำท่วม',
+  '3.3) พายุ',
+  '3.4) ไฟดับวงกว้าง',
+  '4.1) ถูกขโมย',
+  '5.1) การไฟฟ้าตัดสาย ไม่แจ้งแผน',
+  '5.2) การไฟฟ้าตัดสาย มีแผนล่วงหน้า',
+  '5.3) ขอ Back office support',
+  '5.4) ผู้ให้บริการอื่น',
+  '5.5) ทรัพย์สินของเจ้าของพื้นที่',
+  '6.1) TRUE ไม่มี spare part ให้เพียงพอ',
+  '6.2) Spare part ในภูมิภาคไม่เพียงพอ',
+  '6.3) Spare part เสียหาย',
+  '7.1) ไม่มีทีมแก้ไข',
+  '7.2) สลับทำงานเหตุเสีย SA',
+  '7.3) สลับทำงานเหตุเสียสำคัญกว่า',
+  '8.1) Consolidate Project',
+  '8.2) Site รื้อถอน',
+  '8.3) Site ย้ายตำแหน่ง',
+  '8.4) อื่นๆ (ระบุ)'
+];
+function buildGroupOptions(current){
+  const cur = (current||'').trim();
+  const opts = GROUP_PROBLEM_OPTIONS.map(o=>`<option value="${o}"${cur===o?' selected':''}>${o}</option>`).join('');
+  return opts;
+}
+function buildSubOptions(current){
+  const cur = (current||'').trim();
+  const opts = SUB_PROBLEM_OPTIONS.map(o=>`<option value="${o}"${cur===o?' selected':''}>${o}</option>`).join('');
+  return opts;
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res = await fetch(`${API}/api/me`,{credentials:'include'});
+    if(res.ok){
+      const data = await res.json();
+      currentUser = data;
+      initApp(data);
+    }
+  } catch(e){}
+});
+</script>
+<!-- ── Change Password Modal ── -->
+<div id="chgpwd-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:4000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;margin:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <!-- Header -->
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px">🔑</div>
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--text)">เปลี่ยนรหัสผ่าน</div>
+        <div style="font-size:11px;color:var(--muted)" id="chgpwd-username"></div>
+      </div>
+      <button onclick="closeChangePassword()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">✕</button>
+    </div>
+    <!-- Body -->
+    <div style="padding:24px">
+      <!-- Current password -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">รหัสผ่านปัจจุบัน</label>
+        <div style="position:relative">
+          <input id="cp-old" type="password" placeholder="กรอกรหัสผ่านเดิม" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-old',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+      </div>
+      <!-- New password -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">รหัสผ่านใหม่</label>
+        <div style="position:relative">
+          <input id="cp-new" type="password" placeholder="อย่างน้อย 8 ตัวอักษร" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" oninput="checkPwdStrength(this.value)" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-new',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+        <!-- Strength bar -->
+        <div style="margin-top:8px">
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div id="pwd-strength-bar" style="height:100%;width:0%;border-radius:2px;transition:all .3s"></div>
+          </div>
+          <div id="pwd-strength-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
+        </div>
+      </div>
+      <!-- Confirm password -->
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px">ยืนยันรหัสผ่านใหม่</label>
+        <div style="position:relative">
+          <input id="cp-confirm" type="password" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" style="width:100%;padding:10px 40px 10px 14px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box" oninput="checkPwdMatch()" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+          <button type="button" onclick="togglePwd('cp-confirm',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">👁</button>
+        </div>
+        <div id="cp-match-msg" style="font-size:10px;margin-top:4px"></div>
+      </div>
+      <!-- Error / success message -->
+      <div id="cp-msg" style="font-size:12px;padding:8px 12px;border-radius:8px;display:none;margin-bottom:16px"></div>
+      <!-- Actions -->
+      <div style="display:flex;gap:10px">
+        <button onclick="closeChangePassword()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font)">ยกเลิก</button>
+        <button id="cp-submit-btn" onclick="submitChangePassword()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:opacity .15s">บันทึกรหัสผ่านใหม่</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openChangePassword(){
+  const el = $('chgpwd-overlay');
+  el.style.display = 'flex';
+  $('chgpwd-username').textContent = `ผู้ใช้: ${currentUser?.user||''} (${currentUser?.role||''})`;
+  $('cp-old').value = '';
+  $('cp-new').value = '';
+  $('cp-confirm').value = '';
+  $('cp-msg').style.display = 'none';
+  $('pwd-strength-bar').style.width = '0%';
+  $('pwd-strength-label').textContent = '';
+  $('cp-match-msg').textContent = '';
+  $('cp-old').focus();
+}
+
+function closeChangePassword(){
+  $('chgpwd-overlay').style.display = 'none';
+}
+
+function togglePwd(inputId, btn){
+  const inp = $(inputId);
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function checkPwdStrength(pw){
+  const bar = $('pwd-strength-bar');
+  const label = $('pwd-strength-label');
+  if(!pw){ bar.style.width='0%'; label.textContent=''; return; }
+  let score = 0;
+  if(pw.length >= 8) score++;
+  if(pw.length >= 12) score++;
+  if(/[A-Z]/.test(pw)) score++;
+  if(/[0-9]/.test(pw)) score++;
+  if(/[^A-Za-z0-9]/.test(pw)) score++;
+  const levels = [
+    {w:'20%',c:'#ef4444',t:'อ่อนมาก'},
+    {w:'40%',c:'#f97316',t:'อ่อน'},
+    {w:'60%',c:'#eab308',t:'ปานกลาง'},
+    {w:'80%',c:'#22c55e',t:'แข็งแกร่ง'},
+    {w:'100%',c:'#10b981',t:'แข็งแกร่งมาก'},
+  ];
+  const l = levels[Math.min(score-1, 4)] || levels[0];
+  bar.style.width = l.w;
+  bar.style.background = l.c;
+  label.textContent = `ความแข็งแกร่ง: ${l.t}`;
+  label.style.color = l.c;
+}
+
+function checkPwdMatch(){
+  const nw = $('cp-new').value;
+  const cf = $('cp-confirm').value;
+  const msg = $('cp-match-msg');
+  if(!cf){ msg.textContent=''; return; }
+  if(nw === cf){
+    msg.textContent = '✅ รหัสผ่านตรงกัน';
+    msg.style.color = '#22c55e';
+  } else {
+    msg.textContent = '❌ รหัสผ่านไม่ตรงกัน';
+    msg.style.color = '#ef4444';
+  }
+}
+
+async function submitChangePassword(){
+  const oldPwd = $('cp-old').value.trim();
+  const newPwd = $('cp-new').value;
+  const confirm = $('cp-confirm').value;
+  const msgEl = $('cp-msg');
+  const btn = $('cp-submit-btn');
+
+  const showMsg = (text, ok) => {
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.style.background = ok ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)';
+    msgEl.style.color = ok ? '#22c55e' : '#ef4444';
+    msgEl.style.border = `1px solid ${ok ? '#22c55e' : '#ef4444'}`;
+  };
+
+  if(!oldPwd){ showMsg('กรุณากรอกรหัสผ่านเดิม', false); return; }
+  if(newPwd.length < 8){ showMsg('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร', false); return; }
+  if(newPwd !== confirm){ showMsg('รหัสผ่านใหม่ไม่ตรงกัน', false); return; }
+  if(oldPwd === newPwd){ showMsg('รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม', false); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+
+  try {
+    const res = await fetch(`${API}/api/change-password`, {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+    });
+    const data = await res.json();
+    if(data.success){
+      showMsg('✅ เปลี่ยนรหัสผ่านสำเร็จ!', true);
+      setTimeout(closeChangePassword, 1500);
+    } else {
+      showMsg(data.error || 'เกิดข้อผิดพลาด', false);
+    }
+  } catch(e){
+    showMsg('ไม่สามารถเชื่อมต่อ Server', false);
+  }
+  btn.disabled = false;
+  btn.textContent = 'บันทึกรหัสผ่านใหม่';
+}
+
+// Close on overlay click
+document.addEventListener('click', e => {
+  if(e.target === $('chgpwd-overlay')) closeChangePassword();
+});
+</script>
+
+<!-- ── Drill Down Modal ── -->
+<div id="drilldown-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;max-width:1100px;margin:0 auto;overflow:hidden">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">🔍 Drill Down — Queue งานที่เกี่ยวข้อง</div>
+        <div style="font-size:11px;color:var(--muted)" id="dd-subtitle"></div>
+      </div>
+      <button onclick="closeDrillDown()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div id="dd-content" style="padding:16px;overflow-x:auto"></div>
+  </div>
+</div>
+
+<script>
+const DRILLDOWN_SHEET_ID = '1_l5UAj1etjGgLCR4DSG6qDoK8c1unFnO6NVHVwvmbAU';
+const DRILLDOWN_COLS = ['Plan','Team ID','Que','เวลาเดินทาง','เวลาเริ่มซ่อม','Hold','Link Up','Status Team','สาเหตุการ Hold','Update Log','สาเหตุ 1','วิธีแก้ไข','รายละเอียดการเก็บงาน','URL PICTURE'];
+
+function openDrillDown(ticketId){
+  $('drilldown-modal').style.display='block';
+  $('dd-subtitle').textContent = `Ticket: ${ticketId}`;
+  $('dd-content').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)"><div class="spinner"></div> กำลังโหลด...</div>';
+  fetchDrillDown(ticketId);
+}
+function closeDrillDown(){
+  $('drilldown-modal').style.display='none';
+}
+async function fetchDrillDown(ticketId){
+  try {
+    const res = await fetch(`${API}/api/drilldown/${encodeURIComponent(ticketId)}`, {credentials:'include'});
+    const data = await res.json();
+    if(data.error){ $('dd-content').innerHTML = `<div style="color:var(--red);padding:16px">❌ ${data.error}</div>`; return; }
+    renderDrillDown(data.rows, ticketId);
+  } catch(e){
+    $('dd-content').innerHTML = '<div style="color:var(--red);padding:16px">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+  }
+}
+function renderDrillDown(rows, ticketId){
+  if(!rows || rows.length===0){
+    $('dd-content').innerHTML = `
+      <div style="text-align:center;padding:32px;color:var(--muted)">
+        <div style="font-size:24px;margin-bottom:8px">🔍</div>
+        <div>ไม่พบ Queue งานสำหรับ Ticket: <strong>${ticketId}</strong></div>
+        <div style="margin-top:10px"><a href="https://docs.google.com/spreadsheets/d/${DRILLDOWN_SHEET_ID}/edit" target="_blank" style="color:var(--accent);font-size:12px">เปิด Google Sheet ↗</a></div>
+      </div>`;
+    return;
+  }
+  $('dd-subtitle').textContent = `Ticket: ${ticketId} — พบ ${rows.length} Queue`;
+  let tbl = `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;color:var(--muted)">พบ <strong style="color:var(--text)">${rows.length}</strong> Queue งาน</span>
+    <a href="https://docs.google.com/spreadsheets/d/${DRILLDOWN_SHEET_ID}/edit" target="_blank" style="font-size:11px;color:var(--accent)">เปิด Google Sheet ↗</a>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+  <thead><tr style="background:var(--bg3)">`;
+  DRILLDOWN_COLS.forEach(c=>{
+    tbl+=`<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--muted);font-size:10px">${c}</th>`;
+  });
+  tbl+='</tr></thead><tbody>';
+  rows.forEach((row,i)=>{
+    tbl+=`<tr style="background:${i%2===0?'transparent':'var(--bg3)'}">`;
+    DRILLDOWN_COLS.forEach(c=>{
+      const v = row[c]||'—';
+      let display = v;
+      if(c==='URL PICTURE' && v && v!=='—'){
+        display=`<a href="${v}" target="_blank" style="color:var(--accent);font-weight:600;white-space:nowrap">📷 ดูรูป ↗</a>`;
+      }
+      tbl+=`<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(v).replace(/"/g,'&quot;')}">${display}</td>`;
+    });
+    tbl+='</tr>';
+  });
+  tbl+='</tbody></table>';
+  $('dd-content').innerHTML = tbl;
+}
+</script>
+
+</body>
+</html>
