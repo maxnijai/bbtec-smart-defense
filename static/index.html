@@ -1954,9 +1954,11 @@ function openTicket(ticket){
 
   // Step 5 Manager Approve + Manager Defend option
   else if(isManagerRole(role) && step==='4'){
+    const _dc = parseInt(String(ticket.DEFEND_COUNT||'0').replace(/\/.*/,'')) || 0;
     const canMgrDefend = String(ticket.FINAL_RESULT||'').trim()==='ปรับ'
-      && parseInt(ticket.DEFEND_COUNT||0)>=2
+      && _dc >= 2
       && !String(ticket.MANAGER_DEFEND||'').trim()
+      && String(ticket.MANAGER_DEFEND||'').trim() !== 'undefined'
       && !locked;
     formHTML = `
       <div class="form-section">
