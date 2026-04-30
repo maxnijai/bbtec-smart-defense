@@ -2079,10 +2079,19 @@ function closeModal(e){
 }
 
 function selectDecision(val){
-  $('f-fso-decision').value = val;
-  $('dec-penalty').className = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
-  $('dec-no-penalty').className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
-  const btn = $('btn-fso-submit');
+  // Set hidden value
+  const fsoInput = document.getElementById('f-fso-decision');
+  if(fsoInput) fsoInput.value = val;
+
+  // Update button styles — search within modal
+  const modal = document.getElementById('modal-overlay');
+  const penaltyBtn   = modal ? modal.querySelector('#dec-penalty')    : document.getElementById('dec-penalty');
+  const noPenaltyBtn = modal ? modal.querySelector('#dec-no-penalty') : document.getElementById('dec-no-penalty');
+  if(penaltyBtn)   penaltyBtn.className   = 'dec-btn' + (val==='ปรับ'?' selected-penalty':'');
+  if(noPenaltyBtn) noPenaltyBtn.className = 'dec-btn' + (val==='ไม่ปรับ'?' selected-no-penalty':'');
+
+  // Enable submit button — search within modal
+  const btn = modal ? modal.querySelector('#btn-fso-submit') : document.getElementById('btn-fso-submit');
   if(btn) btn.disabled = false;
 }
 
