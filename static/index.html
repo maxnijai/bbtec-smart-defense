@@ -2041,8 +2041,6 @@ function openTicket(ticket){
     formHTML = `<div style="text-align:center;color:var(--muted);padding:16px">${lockLabel} ไม่มีการดำเนินการที่รอบทบาทของคุณ</div>`;
   }
 
-  // Clear stale duplicate IDs before re-rendering modal
-  $('modal-body').innerHTML = '';
   $('modal-body').innerHTML = `
     <div class="step-progress">${spHTML}</div>
     <div class="detail-grid">
@@ -2082,8 +2080,11 @@ function openTicket(ticket){
       <div id="audit-list" style="font-size:11px;color:var(--muted);display:none">กำลังโหลด...</div>
     </div>
   `;
-  // Reset any stale btn-fso-submit to prevent duplicate ID issues
-  document.querySelectorAll('#btn-fso-submit').forEach(b=>b.remove());
+  // Remove duplicate IDs after render (keep only last instance which is the active one)
+  ['btn-fso-submit','f-fso-decision','dec-penalty','dec-no-penalty'].forEach(id=>{
+    const els = document.querySelectorAll('#'+id);
+    if(els.length > 1) els[0].remove(); // keep last one
+  });
   $('modal-overlay').classList.add('open');
 }
 
