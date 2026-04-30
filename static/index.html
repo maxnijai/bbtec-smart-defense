@@ -1921,16 +1921,26 @@ function openTicket(ticket){
 
   // Step 3 Defend review (FSO)
   else if(isFSORole(role) && !locked && step==='3'){
-    // Use normalized _defend_reason from backend, fallback to dynamic search
-    let defendReason = ticket['_defend_reason'] || '';
+    // Defend reason — try all known field names
+    const DEFEND_FIELDS = [
+      'BBTEC Defend\nไม่สมควรปรับ',
+      'BBTEC Defend1\nไม่สมควรปรับ',
+      'defend_reason','_defend_reason',
+      'BBTEC Defend ไม่สมควรปรับ',
+    ];
+    let defendReason = '';
+    for(const f of DEFEND_FIELDS){
+      if(ticket[f]){ defendReason = ticket[f]; break; }
+    }
+    // Fallback: search all keys
     if(!defendReason){
       for(const [k,v] of Object.entries(ticket)){
-        if(k.includes('Defend') && (k.includes('สมควร') || k.includes('BBTEC')) && v){
+        if(v && (k.toLowerCase().includes('defend') || k.includes('สมควร') || k.includes('BBTEC'))){
           defendReason = v; break;
         }
       }
     }
-    if(!defendReason) defendReason = '—';
+    if(!defendReason) defendReason = '(ไม่พบเหตุผล)';
     formHTML = `
       <div class="form-section">
         <div class="form-section-title">STEP 3 — FSO พิจารณา Defend ครั้งที่ ${defendCount}/2</div>
@@ -2031,6 +2041,8 @@ function openTicket(ticket){
     formHTML = `<div style="text-align:center;color:var(--muted);padding:16px">${lockLabel} ไม่มีการดำเนินการที่รอบทบาทของคุณ</div>`;
   }
 
+  // Clear stale duplicate IDs before re-rendering modal
+  $('modal-body').innerHTML = '';
   $('modal-body').innerHTML = `
     <div class="step-progress">${spHTML}</div>
     <div class="detail-grid">
@@ -2070,11 +2082,17 @@ function openTicket(ticket){
       <div id="audit-list" style="font-size:11px;color:var(--muted);display:none">กำลังโหลด...</div>
     </div>
   `;
+  // Reset any stale btn-fso-submit to prevent duplicate ID issues
+  document.querySelectorAll('#btn-fso-submit').forEach(b=>b.remove());
   $('modal-overlay').classList.add('open');
 }
 
 function closeModal(e){
   if(e && e.target !== $('modal-overlay')) return;
+  $('modal-overlay').classList.remove('open');
+}
+
+function forceCloseModal(){
   $('modal-overlay').classList.remove('open');
 }
 
@@ -2144,7 +2162,7 @@ async function submitStep1(tid){
     'Overdue Detail แนบLINK รูป': body.overdue_detail,
     'แนบ LINK ชี้แจง': body.link_evidence,
   });
-  closeModal();
+  forceCloseModal();
   showToast('บันทึก Step 1 สำเร็จ ✓', 'success');
   // Sync to server in background
   apiPostSilent(`/api/ticket/${tid}/step1`, body);
@@ -2155,7 +2173,7 @@ async function submitStep2(tid){
   if(!decision){ showToast('กรุณาเลือก ปรับ หรือ ไม่ปรับ','error'); return; }
   const body = { fso_decision: decision, remark: $('f-remark')?.value||'' };
   optimisticUpdate(tid, { STEP:'2', 'FSO พิจารณา (ปรับ/ไม่ปรับ)': decision, FINAL_RESULT: decision === 'ปรับ' ? 'ปรับ' : '' });
-  closeModal();
+  forceCloseModal();
   showToast('บันทึก Step 2 สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/step2`, body);
 }
@@ -2167,7 +2185,7 @@ async function submitDefendRequest(tid){
   const cur = allTickets.find(t => String(t.TICKETID) === String(tid));
   const nextCount = String(parseInt(cur?.DEFEND_COUNT||0) + 1);
   optimisticUpdate(tid, { STEP:'3', DEFEND_COUNT: nextCount });
-  closeModal(); showToast('ส่ง Defend สำเร็จ ✓','success');
+  forceCloseModal(); showToast('ส่ง Defend สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/defend/request`, { defend_reason: reason });
 }
 
@@ -2176,13 +2194,13 @@ async function submitDefendReview(tid){
   if(!decision){ showToast('กรุณาเลือกผล','error'); return; }
   const body = { decision, remark: $('f-remark')?.value||'' };
   optimisticUpdate(tid, { STEP:'3', FINAL_RESULT: decision });
-  closeModal(); showToast('บันทึกผล Defend สำเร็จ ✓','success');
+  forceCloseModal(); showToast('บันทึกผล Defend สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/defend/review`, body);
 }
 
 async function submitApprove(tid){
   optimisticUpdate(tid, { STEP:'5' });
-  closeModal(); showToast('Approve สำเร็จ ✓','success');
+  forceCloseModal(); showToast('Approve สำเร็จ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/approve`, {});
 }
 
@@ -2198,7 +2216,7 @@ async function submitManagerDefend(tid){
   const reason = $('f-mgr-defend-reason')?.value?.trim()||'';
   if(!reason){ showToast('กรุณากรอกเหตุผลการ Defend','error'); return; }
   optimisticUpdate(tid, { STEP:'3', MANAGER_DEFEND: reason });
-  closeModal(); showToast('ส่ง Manager Defend แล้ว รอ FSO Manager ตรวจสอบ ✓','success');
+  forceCloseModal(); showToast('ส่ง Manager Defend แล้ว รอ FSO Manager ตรวจสอบ ✓','success');
   apiPostSilent(`/api/ticket/${tid}/manager-defend/request`, { reason });
 }
 
@@ -2208,7 +2226,7 @@ async function submitManagerDefendReview(tid){
   const remark = $('f-mgr-remark')?.value||'';
   const fr = decision==='ไม่ปรับ' ? 'ไม่ปรับ' : 'ปรับ';
   optimisticUpdate(tid, { STEP: decision==='ไม่ปรับ'?'4':'4', FINAL_RESULT: fr, LOCKED: 'TRUE' });
-  closeModal(); showToast(`FSO Manager ตัดสิน: ${decision} — ขั้นสุดท้าย 🔒`,'success');
+  forceCloseModal(); showToast(`FSO Manager ตัดสิน: ${decision} — ขั้นสุดท้าย 🔒`,'success');
   apiPostSilent(`/api/ticket/${tid}/manager-defend/review`, { decision, remark });
 }
 
@@ -2346,7 +2364,7 @@ async function apiPost(url, body){
         const patch = getPatchFromUrl(url, body);
         optimisticUpdate(tid, patch);
       }
-      closeModal();
+      forceCloseModal();
       setTimeout(safeRefresh, 800);
     } else {
       showToast(data.error||'เกิดข้อผิดพลาด','error');
