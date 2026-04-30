@@ -999,6 +999,18 @@ def manual_sync():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/sync/productivity", methods=["POST"])
+@login_required
+def sync_productivity():
+    """Sync Sheet1 → productivity table. Run every 3 days."""
+    def _run():
+        sync_productivity_from_sheets()
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({
+        "success": True,
+        "message": "เริ่ม Sync Productivity แล้ว (~2-3 นาที)"
+    })
+
 @app.route("/api/sync/status")
 @login_required
 def sync_status():
