@@ -957,17 +957,17 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#6ee7b7">ไม่ปรับ</div>
-            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty)}</div>
+            <div style="font-size:9px;color:#6ee7b7">Defend สำเร็จ</div>
+            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.defend_success||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:#fca5a5">ปรับ</div>
-            <div style="font-size:18px;font-weight:700;color:#ef4444">${fmt(d.final_penalty)}</div>
+            <div style="font-size:9px;color:var(--muted)">รอ Manager</div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.pending_approve||0)}</div>
           </div>
         </div>
         <div style="background:#f0f2f4;border-radius:4px;padding:5px;text-align:center">
-          <div style="font-size:9px;color:var(--muted)">รอดำเนินการ</div>
-          <div style="font-size:13px;font-weight:700;color:#10b981">${fmt(d.pending_approve||0)}</div>
+          <div style="font-size:9px;color:var(--muted)">ยอมรับโทษ (ไม่ Defend)</div>
+          <div style="font-size:13px;font-weight:700;color:#ef4444">${fmt(d.no_defend||0)}</div>
         </div>
       </div>
 
@@ -979,16 +979,16 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#c4b5fd">อนุมัติ</div>
+            <div style="font-size:9px;color:#c4b5fd">รอ FSO Mgr</div>
             <div style="font-size:18px;font-weight:700;color:#a78bfa">${fmt(d.approved||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:var(--muted)">รอ Final</div>
-            <div style="font-size:18px;font-weight:700;color:var(--muted)">${fmt((d.pending_approve||0))}</div>
+            <div style="font-size:9px;color:#fcd34d">Manager Defend</div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.manager_defend_count||0)}</div>
           </div>
         </div>
         <div style="background:#f0f2f4;border-radius:4px;padding:5px;text-align:center">
-          <div style="font-size:9px;color:#c4b5fd">Final Penalty</div>
+          <div style="font-size:9px;color:#c4b5fd">Final Penalty รอตัดสิน</div>
           <div style="font-size:12px;font-weight:700;color:#a78bfa">${fmtM(d.final_penalty_baht)}</div>
         </div>
       </div>
@@ -997,15 +997,15 @@ function renderKPI(d){
       <div style="background:var(--bg3);border-radius:8px;padding:10px 8px;border-top:3px solid #6366f1">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">
           <div style="background:#1e1b4b;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:600;color:#a5b4fc">STEP 6</div>
-          <div style="font-size:10px;font-weight:600;color:var(--text)">FINAL DONE</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text)">FINAL DONE 🔒</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#6ee7b7">ไม่ปรับ</div>
+            <div style="font-size:9px;color:#6ee7b7">ไม่ปรับ ✅</div>
             <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:#fca5a5">ปรับ</div>
+            <div style="font-size:9px;color:#fca5a5">ปรับ 🔒</div>
             <div style="font-size:18px;font-weight:700;color:#ef4444">${fmt(d.final_penalty||0)}</div>
           </div>
         </div>
@@ -1166,6 +1166,8 @@ async function loadTickets(){
       renderTicketTable(getFilteredTickets());
       renderTicketsKPI(getFilteredTickets());
       renderPivotTable(allTicketsRaw);
+      // อัพเดท My Tab ถ้ากำลังแสดงอยู่ หรือ pre-render ไว้เลย
+      renderMyTickets();
     }, 50);
   } catch(e){ $('tickets-loading').textContent='โหลดไม่สำเร็จ'; reject(e); }
   resolve();
@@ -1212,12 +1214,12 @@ function stepBadge(step, defendCount, fsoDecision, finalResult, mgrDefend){
   const fr  = String(finalResult||'').trim();
   const mgr = String(mgrDefend||'').trim();
 
-  if(!s || s==='0') return '<span class="badge badge-pending">⬜ รอ Step 1</span>';
-  if(s==='1')       return '<span class="badge badge-1">✅ Step 1</span>';
+  if(!s || s==='0') return '<span class="badge badge-pending">⬜ รอ Engineer</span>';
+  if(s==='1')       return '<span class="badge badge-1" style="background:#fef9ec;color:#92400e">📝 รอ FSO พิจารณา</span>';
   if(s==='2'){
-    if(fso==='ปรับ') return '<span class="badge badge-2" style="background:#fef3c7;color:#92400e">⚠️ FSO: ปรับ</span>';
+    if(fso==='ปรับ')    return '<span class="badge badge-2" style="background:#fef3c7;color:#92400e">⚠️ FSO: ปรับ — รอ Engineer ตัดสินใจ</span>';
     if(fso==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ FSO: ไม่ปรับ</span>';
-    return '<span class="badge badge-2">Step 2</span>';
+    return '<span class="badge badge-2" style="background:#dbeafe;color:#1e40af">🔵 FSO กำลังพิจารณา</span>';
   }
   if(s==='3')  return `<span class="badge badge-3">⚔️ Defend ${dc}/2 — รอ FSO</span>`;
   if(s==='4')  return '<span class="badge badge-4" style="background:#dbeafe;color:#1d4ed8">📋 รอ BBTEC Manager</span>';
@@ -1226,8 +1228,9 @@ function stepBadge(step, defendCount, fsoDecision, finalResult, mgrDefend){
     return '<span class="badge badge-5" style="background:#ede9fe;color:#5b21b6">📋 รอ FSO Manager</span>';
   }
   if(s==='6'){
-    if(fr==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ Final: ไม่ปรับ</span>';
-    return '<span class="badge badge-penalty">🔒 Final: ปรับ</span>';
+    if(fr==='ไม่ปรับ') return '<span class="badge badge-4" style="background:#dcfce7;color:#15803d">✅ Final: ไม่ปรับ 🔒</span>';
+    if(fr==='ปรับ')    return '<span class="badge badge-penalty">🔒 Final: ปรับ</span>';
+    return '<span class="badge" style="background:#f1f5f9;color:#475569">🔒 ปิด Ticket</span>';
   }
   return `<span class="badge badge-pending">${s}</span>`;
 }
@@ -1601,20 +1604,26 @@ function renderMyTickets(){
   let title = 'Ticket ที่รอดำเนินการ';
 
   if(isEngineerRole(role)){
-    // Engineer เห็น: รอ submit + submit แล้ว + FSO สั่งปรับ (รอ Defend/ยอมรับ) + กำลัง Defend
+    // Engineer/Site Sup เห็น: รอ submit + submit แล้ว + FSO สั่งปรับ (รอ Defend/ยอมรับ) + กำลัง Defend
     filtered = allTickets.filter(t => {
       const s = String(t.STEP||'').trim();
       const fso = String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim();
       const locked = String(t.LOCKED||'').toUpperCase()==='TRUE';
-      if(locked) return false; // ticket lock แล้วไม่ต้องทำอะไร
+      if(locked) return false;
       return !s || s==='' || s==='0' || s==='1'
-        || (s==='2' && fso==='ปรับ')  // FSO สั่งปรับ รอ Engineer ขอ Defend หรือยอมรับ
-        || s==='3'; // กำลัง Defend อยู่
+        || (s==='2' && fso==='ปรับ')   // FSO สั่งปรับ รอ Engineer ตัดสินใจ
+        || s==='3';                      // กำลัง Defend อยู่
     });
     title = 'Ticket ที่รอฉัน (Engineer)';
   } else if(isFSORole(role)){
-    // FSO เห็น: Engineer submit แล้ว (step 1) + Engineer ขอ Defend (step 3)
-    filtered = allTickets.filter(t => t.STEP==='1' || t.STEP==='3');
+    // FSO เห็น: Engineer submit แล้ว (step 1) + กำลัง Defend (step 3) + รอพิจารณา (step 2 ไม่มี fso decision)
+    filtered = allTickets.filter(t => {
+      const s = String(t.STEP||'').trim();
+      const fso = String(t['FSO พิจารณา (ปรับ/ไม่ปรับ)']||'').trim();
+      const locked = String(t.LOCKED||'').toUpperCase()==='TRUE';
+      if(locked) return false;
+      return s==='1' || s==='3' || (s==='2' && !fso);
+    });
     title = 'Ticket รอ FSO พิจารณา';
   } else if(isFSOManagerRole(role)){
     // FSO Manager เห็น step=5 ทั้งหมด (BBTEC Manager approve แล้ว รอ FSO Manager)
@@ -1790,8 +1799,9 @@ function linkify(text){
 
 // ── Role helpers (case-insensitive, matches ENGINEER_ZONE etc) ──
 function isEngineerRole(role){
-  const r = (role||'').toUpperCase();
-  return ['ENGINEER','SITE SUP','ENGINEER_ZONE','ENGINEER ZONE'].includes(r);
+  const r = (role||'').toUpperCase().replace(/ /g,'_');
+  return ['ENGINEER','SITE_SUP','SITE_SUPERVISOR','ENGINEER_ZONE','ENGINEER_ZONE'].includes(r)
+    || r.includes('ENGINEER') || r.includes('SITE_SUP');
 }
 function isFSORole(role){
   const r = (role||'').toUpperCase().replace(/ /g,'_');
