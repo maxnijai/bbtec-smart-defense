@@ -872,6 +872,9 @@ def dashboard_summary():
         final_penalty=final_no_penalty=approved=0
         total_baht=final_baht=0
 
+        # cumulative step counts — ตรงกับ pivot table logic
+        cum_s1=cum_s2=cum_s3=cum_s4=cum_s5=cum_s6=0
+
         for row in (rows or []):
             total += 1
             try:
@@ -881,23 +884,28 @@ def dashboard_summary():
             fd = str(row["fso_decision"] or "").strip()
             fr = str(row["final_result"] or "").strip()
             dc = int(row["defend_count"] or 0)
+            sn = int(s) if s.isdigit() else 0
 
-            # reviewed = มีการ submit Step 1 ขึ้นไปแล้ว
-            if s in ("1","2","3","4","5"): reviewed += 1
+            # cumulative — ตรงกับ pivot
+            if sn >= 1: cum_s1 += 1; reviewed += 1
+            if sn >= 2: cum_s2 += 1
+            if sn >= 3: cum_s3 += 1
+            if sn >= 4: cum_s4 += 1
+            if sn >= 5: cum_s5 += 1
+            if sn >= 6: cum_s6 += 1
 
-            # FSO decision — นับเฉพาะที่ FSO ตัดสินแล้วจริงๆ (step >= 2)
-            if s in ("2","3","4","5"):
-                if fd == "ปรับ":   fso_penalty += 1
+            # FSO decision — step >= 2
+            if sn >= 2:
+                if fd == "ปรับ":    fso_penalty += 1
                 elif fd == "ไม่ปรับ": fso_no_penalty += 1
 
-            # Defend — นับเฉพาะ ticket ที่เคยขอ Defend (defend_count > 0)
-            # ไม่นับ ticket ที่ไม่ปรับตั้งแต่แรก (ไม่ได้ defend)
+            # Defend
             if dc > 0:
                 defend_req += 1
                 if dc >= 2: defend_round2 += 1
 
-            # Final result — step 4 หรือ 5 เท่านั้น
-            if s in ("4","5"):
+            # Final result — step 4+ หรือ step 6
+            if sn >= 4:
                 if fr == "ปรับ":
                     final_penalty += 1
                     try: final_baht += float(str(row["data"].get("PENALTYBAHT_TRACKB","0") or "0").replace(",",""))
@@ -927,6 +935,8 @@ def dashboard_summary():
 
         return jsonify({
             "total": total, "reviewed": reviewed,
+            "cum_s1": cum_s1, "cum_s2": cum_s2, "cum_s3": cum_s3,
+            "cum_s4": cum_s4, "cum_s5": cum_s5, "cum_s6": cum_s6,
             "fso_penalty": fso_penalty, "fso_no_penalty": fso_no_penalty,
             "defend_req": defend_req, "defend_success": defend_success,
             "no_defend": no_defend_count,
