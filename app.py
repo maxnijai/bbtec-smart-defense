@@ -402,27 +402,6 @@ def sync_productivity_from_sheets():
     except Exception as e:
         print(f"❌ Productivity sync error: {e}")
         return 0
-    """Write workflow fields back to Sheets async (best-effort)."""
-    def _write():
-        try:
-            sheet = get_sheet("NOR_Penalty_Ticket")
-            all_vals = sheets_retry(sheet.get_all_values)
-            if not all_vals: return
-            headers = all_vals[0]
-            for i, row in enumerate(all_vals[1:], start=2):
-                if len(row) > 0 and str(row[0]).strip() == str(ticketid).strip():
-                    updates = []
-                    for col_name, value in fields.items():
-                        if col_name in headers:
-                            col_idx = headers.index(col_name) + 1
-                            col_letter = _col_letter(col_idx)
-                            updates.append({"range": f"{col_letter}{i}", "values": [[value]]})
-                    if updates:
-                        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
-                    break
-        except Exception as e:
-            print(f"⚠️ write_back_to_sheets error: {e}")
-    threading.Thread(target=_write, daemon=True).start()
 
 def _col_letter(idx):
     result = ""
@@ -432,25 +411,28 @@ def _col_letter(idx):
     return result
 
 def write_back_to_sheets(ticketid, fields: dict):
-    """Write workflow fields back to Sheets async (best-effort, non-blocking)."""
-    import threading
+    """Write workflow fields back to Sheets async (best-effort, non-blocking).
+    ใช้ find() หา row แทน get_all_values() เพื่อลด Sheets API quota ~90%
+    """
     def _write():
         try:
             sheet = get_sheet("NOR_Penalty_Ticket")
-            all_vals = sheets_retry(sheet.get_all_values)
-            if not all_vals: return
-            headers = all_vals[0]
-            for i, row in enumerate(all_vals[1:], start=2):
-                if len(row) > 0 and str(row[0]).strip() == str(ticketid).strip():
-                    updates = []
-                    for col_name, value in fields.items():
-                        if col_name in headers:
-                            col_idx = headers.index(col_name) + 1
-                            col_letter = _col_letter(col_idx)
-                            updates.append({"range": f"{col_letter}{i}", "values": [[value]]})
-                    if updates:
-                        sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
-                    break
+            # ใช้ find() หา cell ของ ticketid ในคอลัมน์ A แทนการดึงทั้ง sheet
+            cell = sheets_retry(sheet.find, str(ticketid).strip(), in_column=1)
+            if not cell:
+                print(f"⚠️ write_back: ไม่พบ {ticketid} ใน Sheet")
+                return
+            row_num = cell.row
+            # ดึงเฉพาะ header row (row 1) เพื่อหา column index
+            header_row = sheets_retry(sheet.row_values, 1)
+            updates = []
+            for col_name, value in fields.items():
+                if col_name in header_row:
+                    col_idx = header_row.index(col_name) + 1
+                    col_letter = _col_letter(col_idx)
+                    updates.append({"range": f"{col_letter}{row_num}", "values": [[value]]})
+            if updates:
+                sheets_retry(sheet.batch_update, updates, value_input_option="USER_ENTERED")
         except Exception as e:
             print(f"⚠️ write_back_to_sheets error: {e}")
     threading.Thread(target=_write, daemon=True).start()
@@ -538,24 +520,9 @@ def login():
     try:
         u = db_execute("SELECT * FROM users WHERE username=%s AND active=TRUE", (username,), fetch="one")
         if not u:
-            # Fallback to Sheets if user not in DB yet
-            sheet = get_sheet("USER_ACCOUNT")
-            users = rows_to_dicts(sheet)
-            u_sheet = next((x for x in users if str(x.get("User","")).strip() == username), None)
-            if not u_sheet:
-                return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
-            if str(u_sheet.get("Active","")).upper() != "TRUE":
-                return jsonify({"error": "บัญชีนี้ถูกระงับ"}), 403
-            stored = str(u_sheet.get("Pass","")).strip()
-            if stored != password and stored != hash_password(password):
-                return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
-            session.update({
-                "user": username, "name": str(u_sheet.get("Name", username)),
-                "role": str(u_sheet.get("Role","")).strip(),
-                "group": str(u_sheet.get("Group","")).strip(),
-                "region": str(u_sheet.get("Region","")).strip(),
-                "province": str(u_sheet.get("Province","")).strip(),
-            })
+            # ไม่ fallback ไป Sheets อีกต่อไป — ป้องกัน quota spike
+            # ถ้า user ยังไม่อยู่ใน DB ให้ Admin รัน /api/sync ก่อน
+            return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
         else:
             stored = str(u["pass_hash"]).strip()
             if stored != password and stored != hash_password(password):
@@ -943,6 +910,7 @@ def dashboard_summary():
         # defend_success = ticket ที่ defend แล้วได้ผล ไม่ปรับ
         defend_success = 0
         no_defend_count = 0  # FSO ตัดสินปรับ แต่ไม่ขอ Defend (ยอมรับหรือรอ)
+        manager_defend_count = 0  # Manager Defend (step 5 with manager_defend)
         for row in (rows or []):
             dc = int(row["defend_count"] or 0)
             fr = str(row["final_result"] or "").strip()
@@ -953,6 +921,9 @@ def dashboard_summary():
             # ไม่ Defend = FSO ตัดสินปรับ + step >= 2 + defend_count = 0
             if fd == "ปรับ" and dc == 0 and s in ("2","4","5"):
                 no_defend_count += 1
+            # Manager Defend = step 5 และมี manager_defend column
+            if s == "5" and str(row.get("data",{}).get("MANAGER_DEFEND","") or "").strip():
+                manager_defend_count += 1
 
         return jsonify({
             "total": total, "reviewed": reviewed,
@@ -962,6 +933,7 @@ def dashboard_summary():
             "defend_round2": defend_round2,
             "final_penalty": final_penalty, "final_no_penalty": final_no_penalty,
             "approved": approved, "pending_approve": max(0, final_penalty - approved),
+            "manager_defend_count": manager_defend_count,
             "total_penalty_baht": total_baht, "final_penalty_baht": final_baht,
             "saved_baht": max(0, total_baht - final_baht),
         })
