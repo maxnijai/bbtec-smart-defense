@@ -883,8 +883,8 @@ function renderKPI(d){
             <div style="font-size:18px;font-weight:700;color:var(--text)">${fmt(d.total)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:var(--muted)">Submit</div>
-            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.reviewed)}</div>
+            <div style="font-size:9px;color:var(--muted)">Submit ≥S1</div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.cum_s1||d.reviewed)}</div>
           </div>
         </div>
         <div style="background:#f0f2f4;border-radius:4px;padding:5px;text-align:center">
@@ -901,12 +901,12 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#fca5a5">ปรับ</div>
-            <div style="font-size:18px;font-weight:700;color:#ef4444">${fmt(d.fso_penalty)}</div>
+            <div style="font-size:9px;color:#93c5fd">ผ่าน FSO ≥S2</div>
+            <div style="font-size:18px;font-weight:700;color:#3b82f6">${fmt(d.cum_s2||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:#6ee7b7">ไม่ปรับ</div>
-            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.fso_no_penalty)}</div>
+            <div style="font-size:9px;color:#fca5a5">FSO: ปรับ</div>
+            <div style="font-size:18px;font-weight:700;color:#ef4444">${fmt(d.fso_penalty)}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
@@ -929,12 +929,12 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#fcd34d">ขอ Defend</div>
-            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.defend_req||0)}</div>
+            <div style="font-size:9px;color:#fcd34d">Defend ≥S3</div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b">${fmt(d.cum_s3||0)}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:9px;color:var(--muted)">ยอมรับ</div>
-            <div style="font-size:18px;font-weight:700;color:var(--muted)">${fmt(d.no_defend||0)}</div>
+            <div style="font-size:9px;color:var(--muted)">ขอ Defend</div>
+            <div style="font-size:18px;font-weight:700;color:var(--muted)">${fmt(d.defend_req||0)}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
@@ -957,8 +957,8 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#6ee7b7">Defend สำเร็จ</div>
-            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.defend_success||0)}</div>
+            <div style="font-size:9px;color:#6ee7b7">ผ่าน Mgr ≥S4</div>
+            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.cum_s4||0)}</div>
           </div>
           <div style="text-align:center">
             <div style="font-size:9px;color:var(--muted)">รอ Manager</div>
@@ -979,8 +979,8 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#c4b5fd">รอ FSO Mgr</div>
-            <div style="font-size:18px;font-weight:700;color:#a78bfa">${fmt(d.approved||0)}</div>
+            <div style="font-size:9px;color:#c4b5fd">ผ่าน FSO Mgr ≥S5</div>
+            <div style="font-size:18px;font-weight:700;color:#a78bfa">${fmt(d.cum_s5||0)}</div>
           </div>
           <div style="text-align:center">
             <div style="font-size:9px;color:#fcd34d">Manager Defend</div>
@@ -1001,8 +1001,8 @@ function renderKPI(d){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
           <div style="text-align:center">
-            <div style="font-size:9px;color:#6ee7b7">ไม่ปรับ ✅</div>
-            <div style="font-size:18px;font-weight:700;color:#10b981">${fmt(d.final_no_penalty||0)}</div>
+            <div style="font-size:9px;color:#6ee7b7">Final S6 ≥S6</div>
+            <div style="font-size:18px;font-weight:700;color:#6366f1">${fmt(d.cum_s6||0)}</div>
           </div>
           <div style="text-align:center">
             <div style="font-size:9px;color:#fca5a5">ปรับ 🔒</div>
