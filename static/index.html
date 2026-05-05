@@ -666,12 +666,12 @@ const $ = id => document.getElementById(id);
 function fmt(n){ return n != null ? Number(n).toLocaleString('th-TH') : '—' }
 function fmtBaht(n){ return n ? Number(n).toLocaleString('th-TH',{maximumFractionDigits:0}) + ' ฿' : '—' }
 
-function showToast(msg, type='success'){
+function showToast(msg, type='success', duration=3000){
   const t = $('toast');
   $('toast-icon').textContent = type === 'success' ? '✓' : '✗';
   $('toast-msg').textContent = msg;
   t.className = `toast show ${type}`;
-  setTimeout(()=> t.className = 'toast', 3000);
+  setTimeout(()=> t.className = 'toast', duration);
 }
 
 function updateClock(){
@@ -1386,10 +1386,13 @@ async function syncFromSheets(btn){
       await loadTickets();
       await loadDashboard();
     } else {
-      showToast(`❌ Sync ไม่สำเร็จ: ${data.error}`, 'error');
+      const msg = data.error || 'Sync ไม่สำเร็จ';
+      showToast(`❌ ${msg}`, 'error', 8000);
+      console.error('Sync error:', msg);
     }
   } catch(e){
-    showToast('❌ ไม่สามารถ Sync ได้', 'error');
+    showToast(`❌ ไม่สามารถเชื่อมต่อ Server ได้ — ${e.message}`, 'error', 8000);
+    console.error('Sync fetch error:', e);
   }
   if(btn){ btn.disabled=false; btn.textContent='⬇️ Sync'; }
 }
