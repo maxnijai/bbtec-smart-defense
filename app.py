@@ -11,6 +11,18 @@ from google.oauth2.service_account import Credentials
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("SECRET_KEY", "bbtec-smart-defense-2026")
 
+# ── Session cookie config ──────────────────────────────────
+# SameSite=Lax ให้ cookie ถูกส่งไปกับทุก same-origin request
+# Secure=True เฉพาะบน HTTPS (Railway ใช้ HTTPS เสมอ)
+app.config.update(
+    SESSION_COOKIE_NAME      = "bbtec_sd_session",
+    SESSION_COOKIE_HTTPONLY  = True,
+    SESSION_COOKIE_SAMESITE  = "Lax",
+    SESSION_COOKIE_SECURE    = os.environ.get("RAILWAY_ENVIRONMENT") is not None,
+    SESSION_COOKIE_PATH      = "/",
+    PERMANENT_SESSION_LIFETIME = 86400,   # 24 ชั่วโมง
+)
+
 # ─────────────────────────────────────────────
 # PostgreSQL connection pool
 # ─────────────────────────────────────────────
@@ -585,6 +597,7 @@ def login():
             stored = str(u["pass_hash"]).strip()
             if stored != password and stored != hash_password(password):
                 return jsonify({"error": "Username หรือ Password ไม่ถูกต้อง"}), 401
+            session.permanent = True   # ใช้ PERMANENT_SESSION_LIFETIME (24h)
             session.update({
                 "user": username, "name": u["name"] or username,
                 "role": u["role"] or "", "group": u["group"] or "",
