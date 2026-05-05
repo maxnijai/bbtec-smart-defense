@@ -258,6 +258,30 @@ def init_db():
 # ─────────────────────────────────────────────
 # Sync: Sheets → DB  (run on startup + /api/sync)
 # ─────────────────────────────────────────────
+def clean_numeric(val):
+    """Strip commas from numeric strings. e.g. '1,600' -> 1600"""
+    if val is None:
+        return None
+    cleaned = str(val).replace(',', '').replace(' ', '').strip()
+    try:
+        return float(cleaned) if '.' in cleaned else int(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+def clean_json_data(r: dict) -> dict:
+    """Clean known numeric fields in a Sheet row before storing as JSONB."""
+    numeric_fields = [
+        'PENALTYBAHT_TRACKB', 'PENALTYBAHT_TRACKA', 'PENALTY_BAHT',
+        'penalty_baht', 'Penalty (Baht)', 'ค่าปรับ',
+    ]
+    cleaned = dict(r)
+    for field in numeric_fields:
+        if field in cleaned and cleaned[field] not in (None, '', '-'):
+            v = clean_numeric(cleaned[field])
+            if v is not None:
+                cleaned[field] = v
+    return cleaned
+
 def sync_tickets_from_sheets():
     """Pull all tickets from Sheets and upsert into DB. Sheets is master — overwrites all fields."""
     try:
@@ -280,9 +304,14 @@ def sync_tickets_from_sheets():
                     tid = str(r.get("TICKETID","")).strip()
                     if not tid:
                         continue
+                    # Clean numeric fields before storing (Sheets may have "1,600" format)
+                    r = clean_json_data(r)
                     # Sheets is master — take ALL fields including manager_defend
                     step           = str(r.get("STEP","")).strip()
-                    defend_count   = int(r.get("DEFEND_COUNT",0) or 0)
+                    try:
+                        defend_count = int(str(r.get("DEFEND_COUNT",0) or 0).replace(",","").strip())
+                    except (ValueError, TypeError):
+                        defend_count = 0
                     locked         = str(r.get("LOCKED","")).upper() == "TRUE"
                     fso_decision   = str(r.get("FSO พิจารณา (ปรับ/ไม่ปรับ)","")).strip()
                     final_result   = str(r.get("FINAL_RESULT","")).strip()
@@ -629,7 +658,7 @@ def get_tickets():
         region   = session.get("region","")
         allowed  = [p.strip() for p in province.split(",") if p.strip() and p.upper() != "ALL"] if province and province.upper() not in ("ALL","") else []
 
-        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by, COALESCE(manager_defend,'') as manager_defend FROM tickets ORDER BY (data->>'PENALTYBAHT_TRACKB')::numeric DESC NULLS LAST", fetch="all")
+        rows = db_execute("SELECT ticketid, data, step, defend_count, locked, fso_decision, final_result, owner1, updated_by, COALESCE(manager_defend,'') as manager_defend FROM tickets ORDER BY NULLIF(REPLACE(REPLACE(data->>'PENALTYBAHT_TRACKB', ',', ''), ' ', ''), '')::numeric DESC NULLS LAST", fetch="all")
         tickets = []
         for row in (rows or []):
             t = ticket_to_dict(row)
