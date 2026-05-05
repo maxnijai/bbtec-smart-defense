@@ -27,15 +27,34 @@ def get_pool():
         )
     return _db_pool
 
+def _reset_pool():
+    """Close and rebuild the connection pool (called when pool is broken after redeploy)."""
+    global _db_pool
+    try:
+        if _db_pool is not None:
+            _db_pool.closeall()
+    except Exception:
+        pass
+    _db_pool = None
+
 def get_conn():
-    return get_pool().getconn()
+    try:
+        return get_pool().getconn()
+    except Exception:
+        # Pool may be broken after Railway redeploy — rebuild
+        _reset_pool()
+        return get_pool().getconn()
 
 def release_conn(conn):
-    get_pool().putconn(conn)
-
-def db_execute(sql, params=None, fetch="none"):
-    conn = get_conn()
     try:
+        get_pool().putconn(conn)
+    except Exception:
+        pass
+
+def db_execute(sql, params=None, fetch="none", _retry=True):
+    conn = None
+    try:
+        conn = get_conn()
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
             if fetch == "one":
@@ -46,11 +65,24 @@ def db_execute(sql, params=None, fetch="none"):
                 result = None
             conn.commit()
         return result
-    except Exception:
-        conn.rollback()
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        # If connection is broken (closed by server), reset pool and retry once
+        err = str(e).lower()
+        if _retry and any(k in err for k in (
+            "connection", "closed", "broken pipe", "eof", "ssl", "timeout"
+        )):
+            print(f"⚠️  DB connection error — resetting pool and retrying: {e}")
+            if conn:
+                release_conn(conn)
+            _reset_pool()
+            return db_execute(sql, params, fetch, _retry=False)
         raise
     finally:
-        release_conn(conn)
+        if conn:
+            release_conn(conn)
 
 # ─────────────────────────────────────────────
 # Google Sheets (read-only — for sync + user auth)
