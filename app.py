@@ -59,32 +59,58 @@ SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1RBWr-lKva_XOqmcKwEE-E7hqIodb
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 _gc_client = None
 
-def get_gc():
-    global _gc_client
-    if _gc_client is not None:
-        return _gc_client
+def _build_gc():
+    """Build a fresh gspread client."""
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=SCOPES)
     elif os.path.exists("credentials.json"):
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     else:
-        raise RuntimeError("ไม่พบ credentials")
-    _gc_client = gspread.authorize(creds)
+        raise RuntimeError("ไม่พบ credentials: ตั้ง GOOGLE_CREDENTIALS_JSON env var")
+    return gspread.authorize(creds)
+
+def get_gc():
+    global _gc_client
+    if _gc_client is None:
+        _gc_client = _build_gc()
     return _gc_client
+
+def _reset_gc():
+    """Force rebuild credentials on next call (used when token expires)."""
+    global _gc_client
+    _gc_client = None
 
 def get_sheet(name):
     return get_gc().open_by_key(SPREADSHEET_ID).worksheet(name)
 
 def sheets_retry(fn, *args, max_retries=4, **kwargs):
+    """Retry Sheets API calls.
+    - 429 quota exceeded : exponential backoff
+    - 401/token expired  : reset client and rebuild credentials, then retry
+    """
     delay = 2
     for attempt in range(max_retries):
         try:
             return fn(*args, **kwargs)
         except Exception as e:
-            if ("429" in str(e) or "quota" in str(e).lower()) and attempt < max_retries - 1:
-                time.sleep(delay + attempt * 1.5)
-                delay = min(delay * 2, 30)
+            err = str(e).lower()
+            is_quota   = "429" in err or "quota" in err
+            is_expired = any(k in err for k in (
+                "401", "invalid_grant", "token has been expired",
+                "token expired", "unauthorized", "invalid credentials"
+            ))
+            if attempt < max_retries - 1:
+                if is_expired:
+                    print(f"🔄 Google token expired — rebuilding credentials (attempt {attempt+1})")
+                    _reset_gc()
+                    time.sleep(1)
+                elif is_quota:
+                    print(f"⏳ Google quota 429 — waiting {delay}s (attempt {attempt+1})")
+                    time.sleep(delay + attempt * 1.5)
+                    delay = min(delay * 2, 30)
+                else:
+                    raise
             else:
                 raise
 
@@ -976,10 +1002,29 @@ def get_audit_log(ticketid):
 def manual_sync():
     try:
         count = sync_tickets_from_sheets()
+        if count == 0:
+            # sync_tickets returns 0 on error — check if sheet is reachable
+            return jsonify({
+                "success": False,
+                "error": "ดึงข้อมูลจาก Google Sheet ไม่ได้ — Sheet ว่างเปล่าหรือ credentials หมดอายุ"
+            }), 500
         sync_users_from_sheets()
         return jsonify({"success": True, "synced": count})
+    except RuntimeError as e:
+        # credentials not found
+        return jsonify({"error": f"Credentials: {e}"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        err = str(e).lower()
+        if "401" in err or "unauthorized" in err or "invalid_grant" in err:
+            msg = "Google credentials หมดอายุ — กรุณาตรวจสอบ GOOGLE_CREDENTIALS_JSON ใน Railway"
+        elif "429" in err or "quota" in err:
+            msg = "Google Sheets API quota เกิน — รอสักครู่แล้วลองใหม่"
+        elif "404" in err or "not found" in err:
+            msg = "ไม่พบ Sheet ชื่อ NOR_Penalty_Ticket — ตรวจสอบ SPREADSHEET_ID"
+        else:
+            msg = str(e)
+        print(f"❌ Sync error: {e}")
+        return jsonify({"error": msg}), 500
 
 @app.route("/api/sync/productivity", methods=["POST"])
 @login_required
