@@ -782,9 +782,15 @@ function showPage(page){
 // ── Fetch with auto-retry on 429 ──
 async function fetchWithRetry(url, opts={}, maxRetries=4){
   let delay = 2000;
+  let lastErr = null;
   for(let i=0; i<maxRetries; i++){
     try {
       const res = await fetch(url, opts);
+      if(!res.ok && res.status === 401){
+        // Session expired — redirect to login
+        window.location.reload();
+        return { error: 'Session หมดอายุ' };
+      }
       const data = await res.json();
       // If 429 quota error — wait and retry
       if(data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))){
@@ -797,13 +803,14 @@ async function fetchWithRetry(url, opts={}, maxRetries=4){
       }
       return data;
     } catch(e){
+      lastErr = e;
       if(i < maxRetries-1){
         await new Promise(r => setTimeout(r, delay));
         delay = Math.min(delay * 2, 30000);
       }
     }
   }
-  return { error: 'ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่' };
+  return { error: lastErr ? `เชื่อมต่อ Server ไม่ได้: ${lastErr.message||'network error'}` : 'ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่' };
 }
 
 async function loadDashboard(){
@@ -1379,19 +1386,21 @@ async function syncFromSheets(btn){
   if(btn){ btn.disabled=true; btn.textContent='⏳ Syncing...'; }
   try {
     const res = await fetch(`${API}/api/sync`, {method:'POST', credentials:'include'});
-    const data = await res.json();
-    if(data.success){
+    let data = {};
+    try { data = await res.json(); } catch(_){}
+    if(res.ok && data.success){
       showToast(`✅ Sync สำเร็จ — ${data.synced} tickets`, 'success');
       Object.keys(_optimisticLocks).forEach(k => delete _optimisticLocks[k]);
       await loadTickets();
       await loadDashboard();
     } else {
-      const msg = data.error || 'Sync ไม่สำเร็จ';
+      const msg = data.error || `Server ตอบ ${res.status}`;
       showToast(`❌ ${msg}`, 'error', 8000);
       console.error('Sync error:', msg);
     }
   } catch(e){
-    showToast(`❌ ไม่สามารถเชื่อมต่อ Server ได้ — ${e.message}`, 'error', 8000);
+    const msg = (e && e.message) ? e.message : 'ไม่สามารถเชื่อมต่อ Server ได้';
+    showToast(`❌ ${msg}`, 'error', 8000);
     console.error('Sync fetch error:', e);
   }
   if(btn){ btn.disabled=false; btn.textContent='⬇️ Sync'; }
